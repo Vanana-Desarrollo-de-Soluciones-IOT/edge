@@ -2,12 +2,13 @@
 
 Provides the shared SqliteDatabase instance and init_db() function
 that creates all tables across bounded contexts.
-Database file: smart_band.db (created automatically in project root).
 """
+
+import os
 
 from peewee import SqliteDatabase
 
-db = SqliteDatabase('smart_band.db')
+db = SqliteDatabase(os.getenv("EDGE_DATABASE_PATH", "clair_edge.db"))
 
 
 def init_db():

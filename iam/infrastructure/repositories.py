@@ -39,40 +39,9 @@ class DeviceRepository:
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,
-                owner_user_id=model.owner_user_id,
             )
         except DeviceModel.DoesNotExist:
             return None
-
-    def get_or_create_test_device(self):
-        """Provision the default test device for development.
-
-        Creates the test device if it doesn't exist yet. Uses hardcoded
-        development credentials — never use in production.
-
-        Returns:
-            The test Device domain entity.
-        """
-        model, created = DeviceModel.get_or_create(
-            device_id="smart-band-001",
-            defaults={
-                "hardware_id": "HW-SB-001-ABC123",
-                "api_key": "test-api-key-123",
-                "status": "ACTIVE",
-                "created_at": datetime(2025, 6, 4, 23, 23, 0, tzinfo=timezone.utc),
-                "last_seen_at": None,
-                "owner_user_id": None,
-            },
-        )
-        return Device(
-            device_id=model.device_id,
-            hardware_id=model.hardware_id,
-            api_key=model.api_key,
-            status=model.status,
-            created_at=model.created_at,
-            last_seen_at=model.last_seen_at,
-            owner_user_id=model.owner_user_id,
-        )
 
     def update_last_seen(self, device_id):
         """Update the last_seen_at timestamp for a device.
