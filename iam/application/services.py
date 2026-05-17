@@ -27,7 +27,7 @@ class AuthApplicationService:
             api_key: The secret API key provided via X-API-Key header.
 
         Returns:
-            True if the device exists and is ACTIVE, False otherwise.
+            True if the device exists and is allowed by its synchronized status.
         """
         device = self.device_repository.find_by_id_and_api_key(device_id, api_key)
         return self.auth_service.authenticate(device)

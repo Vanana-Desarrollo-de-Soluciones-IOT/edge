@@ -20,7 +20,6 @@ class DeviceCacheRepository:
                 status=device["status"],
                 created_at=now,
                 last_seen_at=None,
-                owner_user_id=None,
             ).on_conflict(
                 conflict_target=[DeviceModel.device_id],
                 preserve=[DeviceModel.created_at, DeviceModel.last_seen_at],

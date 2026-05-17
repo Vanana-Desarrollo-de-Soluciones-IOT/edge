@@ -22,12 +22,12 @@ edge-service/
 ├── iam/                           # Bounded Context: Identity & Access Management
 │   ├── domain/
 │   │   ├── entities.py            # Entidad Device (aggregate root, 7 atributos)
-│   │   └── services.py            # AuthService: valida credenciales + status ACTIVE
+│   │   └── services.py            # AuthService: valida credenciales + status sincronizado
 │   ├── application/
-│   │   └── services.py            # AuthApplicationService: orquesta autenticación
+│   │   └── services.py            # AuthApplicationService: orquesta autenticación local
 │   ├── infrastructure/
 │   │   ├── models.py              # DeviceModel (Peewee) → tabla 'devices'
-│   │   └── repositories.py        # DeviceRepository: find, get_or_create, update_last_seen
+│   │   └── repositories.py        # DeviceRepository: find/update_last_seen
 │   └── interfaces/
 │       └── services.py            # Blueprint iam_api + authenticate_request()
 ├── device/                        # Bounded Context: Device Telemetry
@@ -41,9 +41,14 @@ edge-service/
 │   │   └── repositories.py        # DeviceTelemetryRepository: persistencia
 │   └── interfaces/
 │       └── api.py                 # Blueprint device_api + POST /api/v1/device/telemetry
+├── provisioning/                  # Bounded Context: Device Provisioning
+│   ├── application/               # Startup sync + ACL HTTP contra clair-core
+│   ├── domain/                    # Commands, queries y validación de cache
+│   ├── infrastructure/            # Upsert del cache local de devices
+│   └── interfaces/                # Webhook receiver de cambios de devices
 └── shared/                        # Infraestructura compartida
     └── infrastructure/
-        └── database.py            # SqliteDatabase('smart_band.db') + init_db()
+        └── database.py            # SqliteDatabase(EDGE_DATABASE_PATH || 'clair_edge.db') + init_db()
 ```
 
 ## Requisitos Previos
@@ -89,7 +94,7 @@ X-API-Key: <api_key del dispositivo>
 
 ```json
 {
-  "device_id": "smart-band-001",
+  "device_id": "<clair-core-device-id>",
   "co2": 420.5,
   "pm25": 35.2,
   "created_at": "2026-05-16T22:30:00-05:00"
@@ -109,39 +114,38 @@ X-API-Key: <api_key del dispositivo>
 |---|---|---|
 | `201` | Registro creado | `{"id": 1, "device_id": "...", "co2": 420.5, "pm25": 35.2, "created_at": "..."}` |
 | `400` | Campos faltantes o valores inválidos | `{"error": "..."}` |
-| `401` | Credenciales inválidas o dispositivo no ACTIVE | `{"error": "..."}` |
+| `401` | Credenciales inválidas o dispositivo no autorizado | `{"error": "..."}` |
 
 ### Probar con curl
 
 ```bash
 curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
   -H 'Content-Type: application/json' \
-  -H 'X-API-Key: test-api-key-123' \
+  -H 'X-API-Key: <clair-core-api-key>' \
   -d '{
-    "device_id": "smart-band-001",
+    "device_id": "<clair-core-device-id>",
     "co2": 420.5,
     "pm25": 35.2,
     "created_at": "2026-05-16T22:30:00-05:00"
   }'
 ```
 
-## Dispositivo de Prueba (Seed)
+## Sincronización de Devices
 
-Al iniciar, se crea automáticamente un dispositivo de desarrollo:
+El edge no crea devices de prueba. Al iniciar, descarga los devices maestros desde `clair-core` y los cachea en SQLite para validar telemetría localmente.
 
-| Campo | Valor |
-|---|---|
-| `device_id` | `smart-band-001` |
-| `hardware_id` | `HW-SB-001-ABC123` |
-| `api_key` | `test-api-key-123` |
-| `status` | `ACTIVE` |
+Variables relevantes:
 
-> ⚠️ Credenciales solo para desarrollo local. No usar en producción.
+| Variable | Default | Descripción |
+|---|---|---|
+| `EDGE_DATABASE_PATH` | `clair_edge.db` | Ruta del SQLite local del edge |
+| `CLAIR_CORE_DEVICES_URL` | `http://localhost:8080/api/v1/devices/provisioning` | Endpoint de provisioning de `clair-core` |
+| `EDGE_SYNC_DEVICES_ON_STARTUP` | `true` | Ejecuta sincronización inicial al arrancar |
 
 ## Inspeccionar la Base de Datos
 
 ```bash
-sqlite3 smart_band.db ".tables"
-sqlite3 smart_band.db "SELECT * FROM devices;"
-sqlite3 smart_band.db "SELECT * FROM device_telemetry;"
+sqlite3 clair_edge.db ".tables"
+sqlite3 clair_edge.db "SELECT * FROM devices;"
+sqlite3 clair_edge.db "SELECT * FROM device_telemetry;"
 ```

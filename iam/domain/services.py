@@ -19,6 +19,6 @@ class AuthService:
             device: A Device entity instance, or None if not found.
 
         Returns:
-            True if device is not None and not decommissioned.
+            True if device is not None and status is not DECOMMISSIONED.
         """
-        return device is not None and device.status not in {"DECOMMISSIONED", "BLOCKED", "INACTIVE"}
+        return device is not None and device.status != "DECOMMISSIONED"

@@ -39,7 +39,6 @@ class DeviceRepository:
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,
-                owner_user_id=model.owner_user_id,
             )
         except DeviceModel.DoesNotExist:
             return None
