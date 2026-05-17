@@ -9,7 +9,7 @@ class Device:
     """Aggregate root entity representing a registered IoT device.
 
     Attributes:
-        device_id: Unique logical identifier for the device (e.g., "smart-band-001").
+        device_id: clair-core master device UUID cached locally.
         hardware_id: Physical hardware ID — prevents device cloning.
         api_key: Secret key for authentication via X-API-Key header.
         status: Device lifecycle state: "ACTIVE", "INACTIVE", or "BLOCKED".
