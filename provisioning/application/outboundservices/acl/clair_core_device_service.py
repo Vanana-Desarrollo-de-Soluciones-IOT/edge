@@ -4,13 +4,22 @@ import json
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from shared.infrastructure.environment import get_edge_to_core_token
+
 
 class ClairCoreDeviceService:
     """Anti-corruption layer for the clair-core device API."""
 
     def fetch_devices(self, source_url):
         """Fetch devices from clair-core and transform them into edge cache records."""
-        request = Request(source_url, headers={"Accept": "application/json"}, method="GET")
+        request = Request(
+            source_url,
+            headers={
+                "Accept": "application/json",
+                "X-Edge-Token": get_edge_to_core_token(),
+            },
+            method="GET",
+        )
         try:
             with urlopen(request, timeout=10) as response:
                 payload = json.loads(response.read().decode("utf-8"))

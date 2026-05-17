@@ -15,7 +15,7 @@ class DeviceCacheResource:
         return DeviceCacheResource(
             device_id=str(payload.get("device_id") or payload.get("id")),
             hardware_id=payload.get("hardware_id") or payload.get("hardwareId"),
-            api_key=payload.get("api_key") or payload.get("apiKey"),
+            api_key=payload.get("api_key") or payload.get("apiKey") or "",
             status=payload.get("status"),
         )
 

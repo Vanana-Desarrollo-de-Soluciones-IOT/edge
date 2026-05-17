@@ -2,6 +2,8 @@
 
 from flask import Blueprint, jsonify, render_template_string
 
+from shared.infrastructure.environment import get_edge_public_base_url
+
 docs_api = Blueprint("docs_api", __name__)
 
 
@@ -12,7 +14,7 @@ OPENAPI_SPEC = {
         "version": "1.0.0",
         "description": "Edge API for CO2 and PM2.5 telemetry ingestion and clair-core device provisioning.",
     },
-    "servers": [{"url": "http://127.0.0.1:5000", "description": "Local edge service"}],
+    "servers": [{"url": get_edge_public_base_url(), "description": "Edge service"}],
     "tags": [
         {"name": "Telemetry", "description": "Environmental telemetry ingestion from IoT sensors."},
         {"name": "Provisioning", "description": "Device cache synchronization from clair-core."},
@@ -24,7 +26,13 @@ OPENAPI_SPEC = {
                 "in": "header",
                 "name": "X-API-Key",
                 "description": "API key synchronized from clair-core for the device.",
-            }
+            },
+            "EdgeToken": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Edge-Token",
+                "description": "Shared edge token used to protect provisioning endpoints.",
+            },
         },
         "schemas": {
             "CreateTelemetryRequest": {
@@ -47,16 +55,16 @@ OPENAPI_SPEC = {
                     "created_at": {"type": "string", "format": "date-time"},
                 },
             },
-            "DeviceCacheRecord": {
-                "type": "object",
-                "required": ["device_id", "hardware_id", "api_key", "status"],
-                "properties": {
-                    "device_id": {"type": "string"},
-                    "hardware_id": {"type": "string"},
-                    "api_key": {"type": "string"},
-                    "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "MAINTENANCE", "DECOMMISSIONED"]},
+                "DeviceCacheRecord": {
+                    "type": "object",
+                    "required": ["device_id", "hardware_id", "api_key", "status"],
+                    "properties": {
+                        "device_id": {"type": "string"},
+                        "hardware_id": {"type": "string"},
+                        "api_key": {"type": "string"},
+                        "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "MAINTENANCE", "DECOMMISSIONED"]},
+                    },
                 },
-            },
             "DeviceChangedEvent": {
                 "type": "object",
                 "required": ["event_type", "device"],
@@ -94,6 +102,7 @@ OPENAPI_SPEC = {
                 "tags": ["Provisioning"],
                 "summary": "Receive clair-core device change event",
                 "description": "Upserts a device from clair-core into the local edge SQLite cache.",
+                "security": [{"EdgeToken": []}],
                 "requestBody": {
                     "required": True,
                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceChangedEvent"}}},
@@ -101,6 +110,20 @@ OPENAPI_SPEC = {
                 "responses": {
                     "200": {"description": "Local device cache updated."},
                     "400": {"description": "Missing fields or invalid payload.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+        "/api/v1/provisioning/devices/sync": {
+            "post": {
+                "tags": ["Provisioning"],
+                "summary": "Trigger provisioning sync",
+                "description": "Downloads devices from clair-core provisioning endpoint and upserts into SQLite cache.",
+                "security": [{"EdgeToken": []}],
+                "responses": {
+                    "200": {"description": "Sync completed."},
+                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "503": {"description": "clair-core unreachable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                 },
             }
         },

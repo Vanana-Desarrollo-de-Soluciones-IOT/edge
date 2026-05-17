@@ -5,8 +5,11 @@ and synchronizes devices from clair-core on first request.
 """
 
 from flask import Flask
-import os
 import logging
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from device.interfaces.api import device_api
 from iam.interfaces.services import iam_api
@@ -14,6 +17,7 @@ from provisioning.application.services.device_provisioning_application_service i
 from provisioning.interfaces.api import provisioning_api
 from shared.interfaces.docs_api import docs_api
 from shared.infrastructure.database import init_db
+from shared.infrastructure.environment import should_sync_devices_on_startup
 
 app = Flask(__name__)
 app.register_blueprint(iam_api)
@@ -32,7 +36,7 @@ def initialize():
     global _initialized
     if not _initialized:
         init_db()
-        if os.getenv("EDGE_SYNC_DEVICES_ON_STARTUP", "true").lower() == "true":
+        if should_sync_devices_on_startup():
             try:
                 DeviceProvisioningApplicationService().sync_devices_from_core()
             except RuntimeError as exc:
@@ -41,4 +45,6 @@ def initialize():
 
 
 if __name__ == "__main__":
+    # Ensure the edge cache is ready even before the first HTTP request.
+    initialize()
     app.run(debug=True)

@@ -1,6 +1,6 @@
 # Edge Service — IoT Telemetry Ingestion
 
-Servicio edge para la ingesta de telemetría ambiental (CO2 y PM2.5) desde dispositivos IoT. Autentica dispositivos, valida los datos y los persiste localmente en SQLite.
+Servicio edge para la ingesta de telemetría ambiental (CO2 y PM2.5) desde dispositivos IoT. Valida el estado del dispositivo localmente (cache) y delega la validacion de credenciales a clair-core.
 
 ## Stack Tecnológico
 
@@ -121,7 +121,7 @@ X-API-Key: <api_key del dispositivo>
 ```bash
 curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
   -H 'Content-Type: application/json' \
-  -H 'X-API-Key: <clair-core-api-key>' \
+  -H 'X-API-Key: <device-api-key>' \
   -d '{
     "device_id": "<clair-core-device-id>",
     "co2": 420.5,
@@ -130,17 +130,28 @@ curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
   }'
 ```
 
-## Sincronización de Devices
+## Sincronizacion de Devices
 
-El edge no crea devices de prueba. Al iniciar, descarga los devices maestros desde `clair-core` y los cachea en SQLite para validar telemetría localmente.
+El edge no crea devices de prueba. Al iniciar, descarga los devices maestros desde `clair-core` y los cachea en SQLite para validar telemetria localmente.
+
+Tambien puedes forzar un sync manual:
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/v1/provisioning/devices/sync \
+  -H 'X-Edge-Token: <EDGE_TO_CORE_TOKEN>'
+```
 
 Variables relevantes:
 
 | Variable | Default | Descripción |
 |---|---|---|
 | `EDGE_DATABASE_PATH` | `clair_edge.db` | Ruta del SQLite local del edge |
-| `CLAIR_CORE_DEVICES_URL` | `http://localhost:8080/api/v1/devices/provisioning` | Endpoint de provisioning de `clair-core` |
-| `EDGE_SYNC_DEVICES_ON_STARTUP` | `true` | Ejecuta sincronización inicial al arrancar |
+| `EDGE_SYNC_DEVICES_ON_STARTUP` | `true` | Ejecuta sincronizacion inicial al arrancar |
+| `CLAIR_CORE_DEVICES_URL` | *(required)* | Endpoint de provisioning de `clair-core` |
+| `EDGE_TO_CORE_TOKEN` | *(required)* | Token compartido para autenticar la sincronizacion edge -> clair-core |
+| `EDGE_PUBLIC_BASE_URL` | `http://127.0.0.1:5000` | Base URL para el OpenAPI `servers` (docs) |
+
+Este proyecto soporta archivo `.env` (cargado al iniciar via `python-dotenv`). Usa `.env.example` como base.
 
 ## Inspeccionar la Base de Datos
 

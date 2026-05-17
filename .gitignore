@@ -9,3 +9,4 @@ wheels/
 # Virtual environments
 .venv
 clair_edge.db
+.env
