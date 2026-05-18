@@ -114,19 +114,7 @@ OPENAPI_SPEC = {
                 },
             }
         },
-        "/api/v1/provisioning/devices/sync": {
-            "post": {
-                "tags": ["Provisioning"],
-                "summary": "Trigger provisioning sync",
-                "description": "Downloads devices from clair-core provisioning endpoint and upserts into SQLite cache.",
-                "security": [{"EdgeToken": []}],
-                "responses": {
-                    "200": {"description": "Sync completed."},
-                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                    "503": {"description": "clair-core unreachable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                },
-            }
-        },
+        
     },
 }
 

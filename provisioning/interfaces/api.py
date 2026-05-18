@@ -40,23 +40,7 @@ def receive_device_change_event():
         return jsonify({"error": str(exc)}), 400
 
 
-@provisioning_api.route("/api/v1/provisioning/devices/sync", methods=["POST"])
-def sync_devices_from_core():
-    """Manually trigger a clair-core device provisioning sync.
+"""Note: manual sync endpoint intentionally removed.
 
-    Protected with X-Edge-Token to avoid arbitrary cache poisoning.
-
-    Returns:
-        200: Sync completed with number of upserted records.
-        401: Missing or invalid X-Edge-Token.
-        503: clair-core unreachable or misconfigured.
-    """
-    provided_token = request.headers.get("X-Edge-Token", "").strip()
-    if not provided_token or provided_token != get_edge_to_core_token():
-        return jsonify({"error": "Missing or invalid X-Edge-Token"}), 401
-
-    try:
-        count = provisioning_service.sync_devices_from_core()
-        return jsonify({"updated": count}), 200
-    except RuntimeError as exc:
-        return jsonify({"error": str(exc)}), 503
+The edge synchronizes automatically on startup and via clair-core webhooks.
+"""

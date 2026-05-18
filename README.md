@@ -134,12 +134,7 @@ curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
 
 El edge no crea devices de prueba. Al iniciar, descarga los devices maestros desde `clair-core` y los cachea en SQLite para validar telemetria localmente.
 
-Tambien puedes forzar un sync manual:
-
-```bash
-curl -X POST http://127.0.0.1:5000/api/v1/provisioning/devices/sync \
-  -H 'X-Edge-Token: <EDGE_TO_CORE_TOKEN>'
-```
+La sincronizacion es automatica al iniciar y via webhooks desde `clair-core`.
 
 Variables relevantes:
 
