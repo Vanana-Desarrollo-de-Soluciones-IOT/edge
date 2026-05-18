@@ -57,3 +57,18 @@ class DeviceRepository:
         ).where(
             DeviceModel.device_id == device_id
         ).execute()
+
+    def find_by_id(self, device_id):
+        """Find a device by its ID (without validating credentials)."""
+        try:
+            model = DeviceModel.get(DeviceModel.device_id == device_id)
+            return Device(
+                device_id=model.device_id,
+                hardware_id=model.hardware_id,
+                api_key=model.api_key,
+                status=model.status,
+                created_at=model.created_at,
+                last_seen_at=model.last_seen_at,
+            )
+        except DeviceModel.DoesNotExist:
+            return None

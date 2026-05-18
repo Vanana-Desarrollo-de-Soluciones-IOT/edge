@@ -4,11 +4,11 @@ Provides the shared SqliteDatabase instance and init_db() function
 that creates all tables across bounded contexts.
 """
 
-import os
-
 from peewee import SqliteDatabase
 
-db = SqliteDatabase(os.getenv("EDGE_DATABASE_PATH", "clair_edge.db"))
+from shared.infrastructure.environment import get_edge_database_path
+
+db = SqliteDatabase(get_edge_database_path())
 
 
 def init_db():

@@ -1,7 +1,5 @@
 """Application service for provisioning the local device cache."""
 
-import os
-
 from provisioning.application.outboundservices.acl.clair_core_device_service import ClairCoreDeviceService
 from provisioning.domain.commands.synchronize_devices_command import SynchronizeDevicesCommand
 from provisioning.domain.services.device_cache_service import DeviceCacheService
@@ -18,10 +16,7 @@ class DeviceProvisioningApplicationService:
 
     def sync_devices_from_core(self):
         """Download master devices from clair-core and cache them locally."""
-        source_url = os.getenv(
-            "CLAIR_CORE_DEVICES_URL",
-            "http://localhost:8080/api/v1/devices/provisioning",
-        )
+        source_url = get_clair_core_devices_url()
         devices = self.core_device_service.fetch_devices(source_url)
         return self.synchronize_devices(SynchronizeDevicesCommand(devices))
 
@@ -30,3 +25,4 @@ class DeviceProvisioningApplicationService:
         for device in command.devices:
             self.device_cache_service.validate_device_record(device)
         return self.device_cache_repository.upsert_many(command.devices)
+from shared.infrastructure.environment import get_clair_core_devices_url
