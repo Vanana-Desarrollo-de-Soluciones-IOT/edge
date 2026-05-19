@@ -1,0 +1,7 @@
+"""Device domain commands package."""
+
+from device.domain.commands.create_full_telemetry_record_command import (
+    CreateFullTelemetryRecordCommand,
+)
+
+__all__ = ["CreateFullTelemetryRecordCommand"]

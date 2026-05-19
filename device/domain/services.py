@@ -1,71 +1,93 @@
 """Device domain services.
 
-Contains business rules for CO2/PM2.5 data validation
-and timestamp normalization.
+Contains business rules for telemetry data validation, timestamp normalization,
+and creation of complete DeviceTelemetry aggregate roots with all value objects.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from dateutil import parser as dateutil_parser
 
+from device.domain.commands import CreateFullTelemetryRecordCommand
 from device.domain.entities import DeviceTelemetry
+from device.domain.valueobjects import (
+    AirQuality,
+    Connectivity,
+    DeviceHealth,
+    DeviceInfo,
+    ParticulateMatter,
+)
 
 
 class DeviceTelemetryService:
-    """Domain service for telemetry data validation and creation.
+    """Domain service for complete telemetry validation and creation.
 
     Enforces business rules:
-    - CO2 must be a valid float in range [0, 5000] ppm
-    - PM2.5 must be a valid float in range [0, 500] µg/m³
+    - All sensor readings must be within valid ranges
+    - Value objects validate their own invariants
     - Timestamps are normalized to UTC
     """
 
     @staticmethod
-    def create_record(device_id, co2, pm25, created_at=None):
-        """Validate inputs and create a DeviceTelemetry domain entity.
+    def create_record_from_command(command: CreateFullTelemetryRecordCommand) -> DeviceTelemetry:
+        """Validate command data and create a complete DeviceTelemetry entity.
+
+        This method creates value objects from the raw command data, which perform
+        their own validation. Then constructs the aggregate root with all data.
 
         Args:
-            device_id: Logical identifier of the source device.
-            co2: CO2 concentration in ppm (will be cast to float).
-            pm25: PM2.5 concentration in µg/m³ (will be cast to float).
-            created_at: ISO 8601 string, datetime, or None (defaults to UTC now).
+            command: CreateFullTelemetryRecordCommand with all device data.
 
         Returns:
-            A validated DeviceTelemetry domain entity.
+            A validated DeviceTelemetry aggregate root entity.
 
         Raises:
-            ValueError: If co2 or pm25 are not valid numbers or out of range,
-                        or if created_at cannot be parsed.
+            ValueError: If any validation fails in value objects or entity creation.
         """
-        # Validate CO2
-        try:
-            co2 = float(co2)
-        except (TypeError, ValueError):
-            raise ValueError(f"Invalid CO2 value: {co2}")
+        # Create value objects from command data (validation happens in __post_init__)
+        air_quality = AirQuality.from_dict(command.air_quality)
+        particulate_matter = ParticulateMatter.from_dict(command.particulate_matter)
+        connectivity = Connectivity.from_dict(command.connectivity)
+        device_health = DeviceHealth.from_dict(command.device_health)
+        device_info = DeviceInfo.from_dict(command.device_info)
 
-        if co2 < 0 or co2 > 5000:
-            raise ValueError(f"CO2 must be between 0 and 5000 ppm, got {co2}")
+        # Parse timestamp - use provided or current UTC time
+        recorded_at = DeviceTelemetryService._parse_timestamp(command.created_at)
 
-        # Validate PM2.5
-        try:
-            pm25 = float(pm25)
-        except (TypeError, ValueError):
-            raise ValueError(f"Invalid PM2.5 value: {pm25}")
-
-        if pm25 < 0 or pm25 > 500:
-            raise ValueError(f"PM2.5 must be between 0 and 500 µg/m³, got {pm25}")
-
-        # Parse timestamp
-        if created_at is None:
-            parsed_created_at = datetime.now(timezone.utc)
-        elif isinstance(created_at, str):
-            parsed_created_at = dateutil_parser.parse(created_at).astimezone(timezone.utc)
-        else:
-            parsed_created_at = created_at.astimezone(timezone.utc)
-
+        # Create and return the aggregate root
         return DeviceTelemetry(
-            device_id=device_id,
-            co2=co2,
-            pm25=pm25,
-            created_at=parsed_created_at,
+            device_id=command.hardware_id,
+            device_timestamp=command.device_timestamp,
+            uptime_seconds=command.uptime_seconds,
+            air_quality=air_quality,
+            particulate_matter=particulate_matter,
+            connectivity=connectivity,
+            device_health=device_health,
+            device_info=device_info,
+            status=command.status,
+            status_code=command.status_code,
+            recorded_at=recorded_at,
         )
+
+    @staticmethod
+    def _parse_timestamp(created_at: Optional[str]) -> datetime:
+        """Parse timestamp string to UTC datetime.
+
+        Args:
+            created_at: ISO 8601 timestamp string or None.
+
+        Returns:
+            UTC datetime.
+
+        Raises:
+            ValueError: If timestamp cannot be parsed.
+        """
+        if created_at is None:
+            return datetime.now(timezone.utc)
+
+        try:
+            parsed = dateutil_parser.parse(created_at)
+            return parsed.astimezone(timezone.utc)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid timestamp format: {created_at}") from e
