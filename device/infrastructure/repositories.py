@@ -38,11 +38,9 @@ class DeviceTelemetryRepository:
             co2=telemetry.air_quality.co2,
             temperature=telemetry.air_quality.temperature,
             humidity=telemetry.air_quality.humidity,
-            air_quality_valid=telemetry.air_quality.valid,
             pm1_0=telemetry.particulate_matter.pm1_0,
             pm2_5=telemetry.particulate_matter.pm2_5,
             pm10=telemetry.particulate_matter.pm10,
-            pm_valid=telemetry.particulate_matter.valid,
             wifi_status=telemetry.connectivity.status,
             network_name=telemetry.connectivity.network,
             signal_strength=telemetry.connectivity.signal_strength,
@@ -86,14 +84,12 @@ class DeviceTelemetryRepository:
             co2=model.co2,
             temperature=model.temperature,
             humidity=model.humidity,
-            valid=model.air_quality_valid,
         )
 
         particulate_matter = ParticulateMatter(
             pm1_0=model.pm1_0,
             pm2_5=model.pm2_5,
             pm10=model.pm10,
-            valid=model.pm_valid,
         )
 
         connectivity = Connectivity(

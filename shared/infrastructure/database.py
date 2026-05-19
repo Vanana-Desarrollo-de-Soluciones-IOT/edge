@@ -44,6 +44,11 @@ def _migrate_telemetry_schema():
         db.execute_sql("DROP TABLE IF EXISTS device_telemetry")
         return
     
+    # Drop if removed columns still exist
+    if "air_quality_valid" in columns or "pm_valid" in columns:
+        db.execute_sql("DROP TABLE IF EXISTS device_telemetry")
+        return
+    
     # Drop if new required columns are missing
     if "signal_strength" not in columns or "health_status" not in columns:
         db.execute_sql("DROP TABLE IF EXISTS device_telemetry")
