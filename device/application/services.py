@@ -1,19 +1,21 @@
 """Device application services.
 
-Orchestrates telemetry record creation by coordinating cross-context
-device verification, domain validation, and persistence.
+Orchestrates complete telemetry record creation by coordinating cross-context
+device verification, domain validation, and persistence of all device data.
 """
 
+from device.domain.commands import CreateFullTelemetryRecordCommand
+from device.domain.entities import DeviceTelemetry
 from device.domain.services import DeviceTelemetryService
 from device.infrastructure.repositories import DeviceTelemetryRepository
 from iam.infrastructure.repositories import DeviceRepository
 
 
 class DeviceTelemetryAppService:
-    """Application service for device telemetry workflows.
+    """Application service for complete device telemetry workflows.
 
     Coordinates between IAM (device verification), Device domain
-    (CO2/PM2.5 validation), and Device infrastructure (persistence).
+    (full telemetry validation), and Device infrastructure (persistence).
     """
 
     def __init__(self):
@@ -21,24 +23,30 @@ class DeviceTelemetryAppService:
         self.telemetry_service = DeviceTelemetryService()
         self.device_repository = DeviceRepository()
 
-    def create_telemetry_record(self, hardware_id, co2, pm25, created_at):
-        """Create and persist a validated telemetry record.
+    def create_full_telemetry_record(self, command: CreateFullTelemetryRecordCommand) -> DeviceTelemetry:
+        """Create and persist a complete validated telemetry record.
+
+        This method:
+        1. Verifies the device exists in IAM
+        2. Creates value objects and validates all data via domain service
+        3. Persists the complete telemetry record with all fields
 
         Args:
-            hardware_id: Physical hardware identifier of the source device.
-            co2: CO2 concentration in ppm.
-            pm25: PM2.5 concentration in µg/m³.
-            created_at: ISO 8601 timestamp string or None.
+            command: CreateFullTelemetryRecordCommand with all device telemetry data.
 
         Returns:
             The persisted DeviceTelemetry domain entity with assigned ID.
 
         Raises:
-            ValueError: If CO2/PM2.5 invalid, or timestamp malformed.
+            ValueError: If device not found, or any validation fails.
         """
-        device = self.device_repository.find_by_hardware_id(hardware_id)
+        # Verify device exists in IAM
+        device = self.device_repository.find_by_hardware_id(command.hardware_id)
         if device is None:
-            raise ValueError("Device not found")
+            raise ValueError(f"Device not found: {command.hardware_id}")
 
-        record = self.telemetry_service.create_record(hardware_id, co2, pm25, created_at)
+        # Create the complete telemetry entity via domain service
+        record = self.telemetry_service.create_record_from_command(command)
+
+        # Persist and return
         return self.telemetry_repository.save(record)

@@ -1,12 +1,13 @@
 """Device API — Flask blueprint and telemetry ingestion endpoint.
 
 Provides the device_api blueprint with the POST endpoint
-for creating telemetry data records from authenticated devices.
+for creating complete telemetry data records from authenticated devices.
 """
 
 from flask import Blueprint, jsonify, request
 
 from device.application.services import DeviceTelemetryAppService
+from device.domain.commands import CreateFullTelemetryRecordCommand
 from device.interfaces.resources import TelemetryRequest
 from iam.interfaces.services import authenticate_request
 
@@ -17,7 +18,7 @@ telemetry_service = DeviceTelemetryAppService()
 
 @device_api.route("/api/v1/device/telemetry", methods=["POST"])
 def create_telemetry_record():
-    """Create a new telemetry data record for an authenticated device.
+    """Create a new complete telemetry data record for an authenticated device.
 
     Headers:
         Content-Type: application/json
@@ -26,9 +27,9 @@ def create_telemetry_record():
 
     Body (JSON):
         {
-            "deviceId": "CLAIR001",           // Device identifier (camelCase)
-            "timestamp": 20041,               // Device uptime milliseconds
-            "uptime": 30,                     // System uptime seconds
+            "deviceId": "CLAIR001",           // Device identifier
+            "timestamp": 20041,               // Device uptime in milliseconds
+            "uptime": 30,                     // System uptime in seconds
             "airQuality": {                   // SCD41 sensor data
                 "co2": 420,                   // CO2 in ppm (REQUIRED)
                 "temperature": 24.99893,      // Temperature in Celsius
@@ -73,8 +74,8 @@ def create_telemetry_record():
         }
 
     Returns:
-        201: Record created successfully with id, hardware_id, co2, pm25, created_at.
-        400: Missing fields, invalid CO2/PM2.5, or malformed timestamp.
+        201: Record created successfully with complete telemetry data.
+        400: Missing fields, invalid values, or malformed request.
         401: Missing credentials or authentication failure.
     """
     # Authenticate via IAM bounded context
@@ -86,25 +87,108 @@ def create_telemetry_record():
         # Parse JSON payload using DTO
         data = request.get_json()
         telemetry_request = TelemetryRequest.from_dict(data)
-        
+
         # Get hardware_id from header (primary) or payload (fallback)
         hardware_id = request.headers.get("X-Hardware-Id") or telemetry_request.device_id
-        
-        # Extract CO2 and PM2.5 from nested structure
-        co2 = telemetry_request.get_co2()
-        pm25 = telemetry_request.get_pm2_5()
-        created_at = telemetry_request.get_timestamp_iso()
 
-        record = telemetry_service.create_telemetry_record(
-            hardware_id, co2, pm25, created_at
+        # Create command from DTO (transformation at boundary)
+        command = CreateFullTelemetryRecordCommand(
+            hardware_id=hardware_id,
+            device_timestamp=telemetry_request.timestamp,
+            uptime_seconds=telemetry_request.uptime,
+            air_quality={
+                "co2": telemetry_request.air_quality.co2,
+                "temperature": telemetry_request.air_quality.temperature,
+                "humidity": telemetry_request.air_quality.humidity,
+                "valid": telemetry_request.air_quality.valid,
+            },
+            particulate_matter={
+                "pm1_0": telemetry_request.particulate_matter.pm1_0,
+                "pm2_5": telemetry_request.particulate_matter.pm2_5,
+                "pm10": telemetry_request.particulate_matter.pm10,
+                "valid": telemetry_request.particulate_matter.valid,
+            },
+            connectivity={
+                "status": telemetry_request.connectivity.status,
+                "ssid": telemetry_request.connectivity.ssid,
+                "ip": telemetry_request.connectivity.ip,
+                "rssi": telemetry_request.connectivity.rssi,
+                "mac": telemetry_request.connectivity.mac,
+                "channel": telemetry_request.connectivity.channel,
+            },
+            device_health={
+                "freeHeap": telemetry_request.device_health.free_heap,
+                "minFreeHeap": telemetry_request.device_health.min_free_heap,
+                "heapSize": telemetry_request.device_health.heap_size,
+                "maxAllocHeap": telemetry_request.device_health.max_alloc_heap,
+                "scd41Status": telemetry_request.device_health.scd41_status,
+                "pms5003Status": telemetry_request.device_health.pms5003_status,
+                "lastValidAirQualitySec": telemetry_request.device_health.last_valid_air_quality_sec,
+                "lastValidPMSec": telemetry_request.device_health.last_valid_pm_sec,
+            },
+            device_info={
+                "chipModel": telemetry_request.device_info.chip_model,
+                "chipRevision": telemetry_request.device_info.chip_revision,
+                "cpuFreqMHz": telemetry_request.device_info.cpu_freq_mhz,
+                "flashSize": telemetry_request.device_info.flash_size,
+                "sketchSize": telemetry_request.device_info.sketch_size,
+                "freeSketchSpace": telemetry_request.device_info.free_sketch_space,
+            },
+            status=telemetry_request.status,
+            status_code=telemetry_request.status_code,
+            created_at=telemetry_request.created_at if telemetry_request.created_at else None,
         )
 
+        # Execute use case via application service
+        record = telemetry_service.create_full_telemetry_record(command)
+
+        # Build response with complete data (transformation at boundary)
         return jsonify({
             "id": record.id,
-            "hardware_id": record.device_id,
-            "co2": record.co2,
-            "pm25": record.pm25,
-            "created_at": record.created_at.isoformat(),
+            "device_id": record.device_id,
+            "device_timestamp": record.device_timestamp,
+            "uptime_seconds": record.uptime_seconds,
+            "air_quality": {
+                "co2": record.air_quality.co2,
+                "temperature": record.air_quality.temperature,
+                "humidity": record.air_quality.humidity,
+                "valid": record.air_quality.valid,
+            },
+            "particulate_matter": {
+                "pm1_0": record.particulate_matter.pm1_0,
+                "pm2_5": record.particulate_matter.pm2_5,
+                "pm10": record.particulate_matter.pm10,
+                "valid": record.particulate_matter.valid,
+            },
+            "connectivity": {
+                "status": record.connectivity.status,
+                "ssid": record.connectivity.ssid,
+                "ip": record.connectivity.ip,
+                "rssi": record.connectivity.rssi,
+                "mac": record.connectivity.mac,
+                "channel": record.connectivity.channel,
+            },
+            "device_health": {
+                "free_heap": record.device_health.free_heap,
+                "min_free_heap": record.device_health.min_free_heap,
+                "heap_size": record.device_health.heap_size,
+                "max_alloc_heap": record.device_health.max_alloc_heap,
+                "scd41_status": record.device_health.scd41_status,
+                "pms5003_status": record.device_health.pms5003_status,
+                "last_valid_air_quality_sec": record.device_health.last_valid_air_quality_sec,
+                "last_valid_pm_sec": record.device_health.last_valid_pm_sec,
+            },
+            "device_info": {
+                "chip_model": record.device_info.chip_model,
+                "chip_revision": record.device_info.chip_revision,
+                "cpu_freq_mhz": record.device_info.cpu_freq_mhz,
+                "flash_size": record.device_info.flash_size,
+                "sketch_size": record.device_info.sketch_size,
+                "free_sketch_space": record.device_info.free_sketch_space,
+            },
+            "status": record.status,
+            "status_code": record.status_code,
+            "recorded_at": record.recorded_at.isoformat(),
         }), 201
 
     except KeyError as e:
