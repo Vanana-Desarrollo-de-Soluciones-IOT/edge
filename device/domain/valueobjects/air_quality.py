@@ -9,17 +9,17 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class AirQuality:
     """SCD41 air quality sensor readings.
-    
+
     Attributes:
         co2: CO2 concentration in parts per million (ppm)
         temperature: Temperature in Celsius
         humidity: Relative humidity percentage (0-100)
-        valid: Whether the sensor reading is valid
+        valid: Whether the sensor reading is valid (defaults to True for optimized payloads)
     """
     co2: float
     temperature: float
     humidity: float
-    valid: bool
+    valid: bool = True
 
     def __post_init__(self):
         """Validate air quality values."""
@@ -37,5 +37,5 @@ class AirQuality:
             co2=float(data.get("co2", 0)),
             temperature=float(data.get("temperature", 0)),
             humidity=float(data.get("humidity", 0)),
-            valid=bool(data.get("valid", False))
+            valid=bool(data.get("valid", True))
         )

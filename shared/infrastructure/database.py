@@ -21,6 +21,26 @@ def _migrate_device_secret():
         pass
 
 
+def _migrate_telemetry_schema():
+    """Recreate device_telemetry table if it still uses the legacy full schema.
+
+    The optimized payload no longer sends deviceHealth, deviceInfo, or detailed
+    connectivity fields. If the old columns are detected, the legacy table is
+    dropped so Peewee can create the clean new schema on startup.
+    """
+    cursor = db.execute_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='device_telemetry'"
+    )
+    if not cursor.fetchone():
+        return
+
+    # Detect legacy column that does not exist in the optimized schema
+    col_cursor = db.execute_sql("PRAGMA table_info(device_telemetry)")
+    columns = {row[1] for row in col_cursor.fetchall()}
+    if "wifi_ssid" in columns or "free_heap" in columns or "chip_model" in columns:
+        db.execute_sql("DROP TABLE IF EXISTS device_telemetry")
+
+
 def init_db():
     """Initialize the database by creating all tables if they don't exist.
 
@@ -32,8 +52,10 @@ def init_db():
         # Deferred imports to avoid circular dependencies
         from iam.infrastructure.models import DeviceModel
         from device.infrastructure.models import DeviceTelemetryModel
+        from device.infrastructure.outbox.outbox_record_model import OutboxRecordModel
 
-        db.create_tables([DeviceModel, DeviceTelemetryModel], safe=True)
+        _migrate_telemetry_schema()
+        db.create_tables([DeviceModel, DeviceTelemetryModel, OutboxRecordModel], safe=True)
         _migrate_device_secret()
     finally:
         db.close()
