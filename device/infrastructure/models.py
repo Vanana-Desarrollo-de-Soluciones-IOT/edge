@@ -54,3 +54,25 @@ class DeviceTelemetryModel(Model):
         indexes = (
             (('device_id', 'recorded_at'), False),
         )
+
+
+class DeviceCommandModel(Model):
+    """Peewee model representing edge-local device commands."""
+
+    command_id = CharField(primary_key=True)
+    device_id = CharField(index=True)
+    hardware_id = CharField(index=True)
+    command_type = CharField()
+    status = CharField(index=True)
+    payload = CharField(null=True)
+    received_at = DateTimeField()
+    delivered_at = DateTimeField(null=True)
+    acknowledged_at = DateTimeField(null=True)
+    failure_reason = CharField(null=True)
+
+    class Meta:
+        database = db
+        table_name = 'device_commands'
+        indexes = (
+            (('hardware_id', 'status'), False),
+        )

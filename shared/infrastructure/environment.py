@@ -32,6 +32,26 @@ def get_clair_core_evaluations_url() -> str:
     return _require("CLAIR_CORE_EVALUATIONS_URL")
 
 
+def get_clair_core_device_commands_pending_url() -> str:
+    configured = os.getenv("CLAIR_CORE_DEVICE_COMMANDS_PENDING_URL", "").strip()
+    if configured:
+        return configured
+    devices_url = get_clair_core_devices_url().rstrip("/")
+    if devices_url.endswith("/provisioning"):
+        devices_url = devices_url[: -len("/provisioning")]
+    return f"{devices_url}/commands/pending"
+
+
+def get_clair_core_device_command_ack_url(device_id: str, command_id: str) -> str:
+    template = os.getenv("CLAIR_CORE_DEVICE_COMMAND_ACK_URL_TEMPLATE", "").strip()
+    if template:
+        return template.format(device_id=device_id, command_id=command_id)
+    devices_url = get_clair_core_devices_url().rstrip("/")
+    if devices_url.endswith("/provisioning"):
+        devices_url = devices_url[: -len("/provisioning")]
+    return f"{devices_url}/{device_id}/commands/{command_id}/ack"
+
+
 def get_edge_to_core_token() -> str:
     return _require("EDGE_TO_CORE_TOKEN")
 

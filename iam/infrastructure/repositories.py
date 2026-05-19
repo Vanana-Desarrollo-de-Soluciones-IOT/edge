@@ -74,3 +74,19 @@ class DeviceRepository:
             )
         except DeviceModel.DoesNotExist:
             return None
+
+    def find_by_device_id(self, device_id):
+        """Find a device by its clair-core device ID."""
+        try:
+            model = DeviceModel.get(DeviceModel.device_id == device_id)
+            return Device(
+                device_id=model.device_id,
+                hardware_id=model.hardware_id,
+                api_key=model.api_key,
+                device_secret=model.device_secret,
+                status=model.status,
+                created_at=model.created_at,
+                last_seen_at=model.last_seen_at,
+            )
+        except DeviceModel.DoesNotExist:
+            return None

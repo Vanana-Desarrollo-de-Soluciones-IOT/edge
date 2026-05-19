@@ -41,6 +41,20 @@ def _migrate_telemetry_schema():
         db.execute_sql("DROP TABLE IF EXISTS device_telemetry")
 
 
+def _migrate_outbox_schema():
+    """Recreate device_outbox if it still stores duplicated JSON payloads."""
+    cursor = db.execute_sql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='device_outbox'"
+    )
+    if not cursor.fetchone():
+        return
+
+    col_cursor = db.execute_sql("PRAGMA table_info(device_outbox)")
+    columns = {row[1] for row in col_cursor.fetchall()}
+    if "payload" in columns or "api_key" in columns or "device_id" in columns:
+        db.execute_sql("DROP TABLE IF EXISTS device_outbox")
+
+
 def init_db():
     """Initialize the database by creating all tables if they don't exist.
 
@@ -51,11 +65,12 @@ def init_db():
     try:
         # Deferred imports to avoid circular dependencies
         from iam.infrastructure.models import DeviceModel
-        from device.infrastructure.models import DeviceTelemetryModel
+        from device.infrastructure.models import DeviceCommandModel, DeviceTelemetryModel
         from device.infrastructure.outbox.outbox_record_model import OutboxRecordModel
 
         _migrate_telemetry_schema()
-        db.create_tables([DeviceModel, DeviceTelemetryModel, OutboxRecordModel], safe=True)
+        _migrate_outbox_schema()
+        db.create_tables([DeviceModel, DeviceTelemetryModel, DeviceCommandModel, OutboxRecordModel], safe=True)
         _migrate_device_secret()
     finally:
         db.close()

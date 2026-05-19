@@ -4,9 +4,27 @@ Represents the optimized telemetry reading received from the embedded device.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from device.domain.valueobjects import AirQuality, Connectivity, ParticulateMatter
+
+
+class DeviceCommandType(str, Enum):
+    """Commands that the embedded device can execute."""
+
+    STANDBY = "STANDBY"
+    WAKE = "WAKE"
+    RESTART = "RESTART"
+
+
+class EdgeDeviceCommandStatus(str, Enum):
+    """Edge-local command delivery status."""
+
+    RECEIVED = "RECEIVED"
+    DELIVERED_TO_EMBEDDED = "DELIVERED_TO_EMBEDDED"
+    EXECUTED = "EXECUTED"
+    FAILED = "FAILED"
 
 
 class DeviceTelemetry:
@@ -71,3 +89,58 @@ class DeviceTelemetry:
     def get_pm2_5(self) -> float:
         """Get PM2.5 concentration from particulate matter readings."""
         return float(self.particulate_matter.pm2_5)
+
+
+class DeviceCommand:
+    """Aggregate root representing a command received from clair-core."""
+
+    def __init__(
+        self,
+        command_id: str,
+        device_id: str,
+        hardware_id: str,
+        command_type: DeviceCommandType,
+        status: EdgeDeviceCommandStatus,
+        payload: Optional[str],
+        received_at: datetime,
+        delivered_at: Optional[datetime] = None,
+        acknowledged_at: Optional[datetime] = None,
+        failure_reason: Optional[str] = None,
+    ):
+        if not command_id:
+            raise ValueError("command_id is required")
+        if not device_id:
+            raise ValueError("device_id is required")
+        if not hardware_id:
+            raise ValueError("hardware_id is required")
+        if command_type is None:
+            raise ValueError("command_type is required")
+        if status is None:
+            raise ValueError("status is required")
+        if received_at is None:
+            raise ValueError("received_at is required")
+
+        self.command_id = command_id
+        self.device_id = device_id
+        self.hardware_id = hardware_id
+        self.command_type = command_type
+        self.status = status
+        self.payload = payload
+        self.received_at = received_at
+        self.delivered_at = delivered_at
+        self.acknowledged_at = acknowledged_at
+        self.failure_reason = failure_reason
+
+    def mark_delivered_to_embedded(self, delivered_at: datetime) -> None:
+        self.status = EdgeDeviceCommandStatus.DELIVERED_TO_EMBEDDED
+        self.delivered_at = delivered_at
+
+    def mark_executed(self, acknowledged_at: datetime) -> None:
+        self.status = EdgeDeviceCommandStatus.EXECUTED
+        self.acknowledged_at = acknowledged_at
+        self.failure_reason = None
+
+    def mark_failed(self, acknowledged_at: datetime, failure_reason: Optional[str]) -> None:
+        self.status = EdgeDeviceCommandStatus.FAILED
+        self.acknowledged_at = acknowledged_at
+        self.failure_reason = failure_reason

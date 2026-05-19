@@ -6,14 +6,24 @@ for creating telemetry data records from authenticated devices.
 
 from flask import Blueprint, jsonify, request
 
-from device.application.services import DeviceTelemetryAppService
-from device.domain.commands import CreateFullTelemetryRecordCommand
-from device.interfaces.resources import TelemetryRequest
+from device.application.services import DeviceCommandApplicationService, DeviceTelemetryAppService
+from device.domain.commands import (
+    AcknowledgeEmbeddedDeviceCommandCommand,
+    CreateFullTelemetryRecordCommand,
+    SynchronizeDeviceCommandsCommand,
+)
+from device.interfaces.resources import (
+    AcknowledgeDeviceCommandRequest,
+    TelemetryRequest,
+    device_command_to_dict,
+)
 from iam.interfaces.services import authenticate_request
+from shared.infrastructure.environment import get_edge_to_core_token
 
 device_api = Blueprint("device_api", __name__)
 
 telemetry_service = DeviceTelemetryAppService()
+command_service = DeviceCommandApplicationService()
 
 
 @device_api.route("/api/v1/device/telemetry", methods=["POST"])
@@ -112,3 +122,99 @@ def create_telemetry_record():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Invalid request format: {str(e)}"}), 400
+
+
+@device_api.route("/api/v1/device/commands/sync", methods=["POST"])
+def synchronize_device_commands():
+    """Synchronize pending device commands from clair-core into the edge cache.
+
+    Headers:
+        X-Edge-Token: shared edge/core token.
+
+    Query Parameters:
+        limit: optional max number of commands to fetch, defaults to 100.
+
+    Returns:
+        200: Commands synchronized and cached locally.
+        401: Missing or invalid edge token.
+        400: Invalid limit or core response shape.
+    """
+    if request.headers.get("X-Edge-Token") != get_edge_to_core_token():
+        return jsonify({"error": "Invalid or missing X-Edge-Token"}), 401
+
+    try:
+        limit = int(request.args.get("limit", 100))
+        commands = command_service.synchronize_pending_commands(
+            SynchronizeDeviceCommandsCommand(limit=limit)
+        )
+        return jsonify({
+            "count": len(commands),
+            "commands": [device_command_to_dict(command) for command in commands],
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Unable to synchronize commands: {str(e)}"}), 400
+
+
+@device_api.route("/api/v1/device/commands/pending", methods=["GET"])
+def get_pending_device_commands_for_embedded():
+    """Return commands pending for the authenticated embedded device.
+
+    Headers:
+        X-Hardware-Id: physical hardware identifier.
+        X-Device-Secret: embedded device secret.
+
+    Returns:
+        200: Pending commands, marked as delivered to the embedded device.
+        401: Missing or invalid device credentials.
+    """
+    auth_error = authenticate_request()
+    if auth_error is not None:
+        return auth_error
+
+    hardware_id = request.headers.get("X-Hardware-Id")
+    commands = command_service.get_pending_commands_for_embedded(hardware_id)
+    return jsonify({
+        "count": len(commands),
+        "commands": [device_command_to_dict(command) for command in commands],
+    }), 200
+
+
+@device_api.route("/api/v1/device/commands/<command_id>/ack", methods=["POST"])
+def acknowledge_embedded_device_command(command_id):
+    """Acknowledge command execution from the authenticated embedded device.
+
+    Headers:
+        X-Hardware-Id: physical hardware identifier.
+        X-Device-Secret: embedded device secret.
+
+    Body:
+        {"status": "EXECUTED"}
+        {"status": "FAILED", "failureReason": "Embedded timeout"}
+
+    Returns:
+        200: ACK persisted locally and forwarded to clair-core when reachable.
+        400: Invalid body or unknown command.
+        401: Missing or invalid device credentials.
+    """
+    auth_error = authenticate_request()
+    if auth_error is not None:
+        return auth_error
+
+    try:
+        ack_request = AcknowledgeDeviceCommandRequest.from_dict(request.get_json())
+        hardware_id = request.headers.get("X-Hardware-Id")
+        command = command_service.acknowledge_embedded_command(
+            AcknowledgeEmbeddedDeviceCommandCommand(
+                hardware_id=hardware_id,
+                command_id=command_id,
+                status=ack_request.status,
+                failure_reason=ack_request.failure_reason,
+            )
+        )
+        return jsonify(device_command_to_dict(command)), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Unable to acknowledge command: {str(e)}"}), 400

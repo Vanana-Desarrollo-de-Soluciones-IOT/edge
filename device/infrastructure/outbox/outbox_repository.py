@@ -24,9 +24,9 @@ class OutboxRepository:
             A new OutboxEntry domain entity with the database-assigned ID.
         """
         model = OutboxRecordModel.create(
-            device_id=entry.device_id,
-            payload=entry.payload,
-            api_key=entry.api_key,
+            aggregate_type=entry.aggregate_type,
+            aggregate_id=entry.aggregate_id,
+            event_type=entry.event_type,
             status=entry.status,
             retry_count=entry.retry_count,
             next_retry_at=entry.next_retry_at,
@@ -103,9 +103,9 @@ class OutboxRepository:
         """Convert a Peewee model instance to an OutboxEntry domain entity."""
         return OutboxEntry(
             id=model.id,
-            device_id=model.device_id,
-            payload=model.payload,
-            api_key=model.api_key,
+            aggregate_type=model.aggregate_type,
+            aggregate_id=model.aggregate_id,
+            event_type=model.event_type,
             status=model.status,
             retry_count=model.retry_count,
             next_retry_at=model.next_retry_at,

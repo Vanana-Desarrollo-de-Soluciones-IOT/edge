@@ -13,9 +13,9 @@ class OutboxEntry:
 
     Attributes:
         id: Database ID (None before persistence).
-        device_id: Source device identifier.
-        payload: Serialized JSON payload to forward.
-        api_key: Device API key for core authentication.
+        aggregate_type: Source aggregate type, e.g. TELEMETRY.
+        aggregate_id: Source aggregate identifier.
+        event_type: Integration event type to publish.
         status: pending, sent, or dead_letter.
         retry_count: Number of delivery attempts made.
         next_retry_at: UTC timestamp when the entry is eligible for retry.
@@ -26,9 +26,9 @@ class OutboxEntry:
 
     def __init__(
         self,
-        device_id: str,
-        payload: str,
-        api_key: str,
+        aggregate_type: str,
+        aggregate_id: int,
+        event_type: str,
         status: str = "pending",
         retry_count: int = 0,
         next_retry_at: Optional[datetime] = None,
@@ -37,19 +37,19 @@ class OutboxEntry:
         sent_at: Optional[datetime] = None,
         error_message: Optional[str] = None,
     ):
-        if not device_id:
-            raise ValueError("device_id is required")
-        if not payload:
-            raise ValueError("payload is required")
-        if not api_key:
-            raise ValueError("api_key is required")
+        if not aggregate_type:
+            raise ValueError("aggregate_type is required")
+        if aggregate_id is None:
+            raise ValueError("aggregate_id is required")
+        if not event_type:
+            raise ValueError("event_type is required")
         if status not in ("pending", "sent", "dead_letter"):
             raise ValueError("status must be pending, sent, or dead_letter")
 
         self.id = id
-        self.device_id = device_id
-        self.payload = payload
-        self.api_key = api_key
+        self.aggregate_type = aggregate_type
+        self.aggregate_id = aggregate_id
+        self.event_type = event_type
         self.status = status
         self.retry_count = retry_count
         self.next_retry_at = next_retry_at or datetime.now(timezone.utc)
