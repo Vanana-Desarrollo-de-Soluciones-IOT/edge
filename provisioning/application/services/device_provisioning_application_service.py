@@ -4,6 +4,7 @@ from provisioning.application.outboundservices.acl.clair_core_device_service imp
 from provisioning.domain.commands.synchronize_devices_command import SynchronizeDevicesCommand
 from provisioning.domain.services.device_cache_service import DeviceCacheService
 from provisioning.infrastructure.device_cache_repository import DeviceCacheRepository
+from shared.infrastructure.environment import get_clair_core_devices_url
 
 
 class DeviceProvisioningApplicationService:
@@ -25,4 +26,3 @@ class DeviceProvisioningApplicationService:
         for device in command.devices:
             self.device_cache_service.validate_device_record(device)
         return self.device_cache_repository.upsert_many(command.devices)
-from shared.infrastructure.environment import get_clair_core_devices_url

@@ -10,7 +10,7 @@ from device.domain.queries.get_device_connection_status_query import (
     GetDeviceConnectionStatusQuery,
 )
 from device.domain.valueobjects.device_connection_status import DeviceConnectionStatus
-from iam.infrastructure.repositories import DeviceRepository
+from device.infrastructure.repositories import DeviceTelemetryRepository
 
 
 class GetDeviceConnectionStatusQueryHandler:
@@ -22,8 +22,8 @@ class GetDeviceConnectionStatusQueryHandler:
 
     OFFLINE_THRESHOLD_SECONDS = 30
 
-    def __init__(self, device_repository: DeviceRepository = None):
-        self.device_repository = device_repository or DeviceRepository()
+    def __init__(self, telemetry_repository: DeviceTelemetryRepository = None):
+        self.telemetry_repository = telemetry_repository or DeviceTelemetryRepository()
 
     def handle(self, query: GetDeviceConnectionStatusQuery) -> DeviceConnectionStatus:
         """Execute the query and return the device connection status.
@@ -33,25 +33,22 @@ class GetDeviceConnectionStatusQueryHandler:
 
         Returns:
             DeviceConnectionStatus with the calculated status.
-
-        Raises:
-            ValueError: If the device is not found.
         """
-        device = self.device_repository.find_by_hardware_id(query.hardware_id)
+        # Find the most recent telemetry record for this device
+        last_telemetry = self.telemetry_repository.find_last_telemetry_by_hardware_id(
+            query.hardware_id
+        )
 
-        if device is None:
-            raise ValueError(f"Device not found: {query.hardware_id}")
-
-        last_seen = device.last_seen_at
-        now = datetime.now(timezone.utc)
-
-        if last_seen is None:
+        if last_telemetry is None:
             return DeviceConnectionStatus(
                 hardware_id=query.hardware_id,
                 status="OFFLINE",
                 last_seen_at=None,
                 seconds_since_last_seen=-1,
             )
+
+        last_seen = last_telemetry.recorded_at
+        now = datetime.now(timezone.utc)
 
         # Ensure last_seen is timezone-aware
         if last_seen.tzinfo is None:

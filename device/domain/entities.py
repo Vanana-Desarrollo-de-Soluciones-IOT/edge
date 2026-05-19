@@ -92,13 +92,7 @@ class DeviceTelemetry:
         self.status = status
         self.recorded_at = recorded_at
 
-    def get_co2(self) -> float:
-        """Get CO2 concentration from air quality readings."""
-        return self.air_quality.co2
 
-    def get_pm2_5(self) -> float:
-        """Get PM2.5 concentration from particulate matter readings."""
-        return float(self.particulate_matter.pm2_5)
 
 
 class DeviceCommand:

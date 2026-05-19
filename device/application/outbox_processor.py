@@ -20,6 +20,7 @@ from device.infrastructure.reliability.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerOpenException,
 )
+from iam.infrastructure.repositories import DeviceRepository
 from shared.infrastructure.database import db
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ class TelemetryOutboxProcessor:
     def __init__(self) -> None:
         self.outbox_repository = OutboxRepository()
         self.telemetry_repository = DeviceTelemetryRepository()
+        self.device_repository = DeviceRepository()
         self.external_core_service = ExternalCoreService()
         self.circuit_breaker = CircuitBreaker(
             failure_threshold=3, recovery_timeout=30.0
@@ -151,7 +153,7 @@ class TelemetryOutboxProcessor:
         if record is None:
             raise ValueError(f"Telemetry record not found: {entry.aggregate_id}")
 
-        device = self.telemetry_repository.find_cached_device_by_hardware_id(record.device_id)
+        device = self.device_repository.find_by_hardware_id(record.device_id)
         if device is None:
             raise ValueError(f"Cached device not found: {record.device_id}")
 

@@ -15,7 +15,7 @@ auth_service = AuthApplicationService()
 device_repository = DeviceRepository()
 
 
-def authenticate_request():
+def authenticate_request(update_last_seen: bool = False):
     """Authenticate the current HTTP request using device credentials.
 
     Extracts hardware_id from the X-Hardware-Id header and device_secret
@@ -26,8 +26,8 @@ def authenticate_request():
         None if authentication succeeds.
         A (response, status_code) tuple if authentication fails (401).
     """
-    hardware_id = request.headers.get("X-Hardware-Id")
-    device_secret = request.headers.get("X-Device-Secret")
+    hardware_id = request.headers.get("X-Hardware-Id", "").strip()
+    device_secret = request.headers.get("X-Device-Secret", "").strip()
 
     if not hardware_id or not device_secret:
         return jsonify({"error": "Missing X-Hardware-Id or X-Device-Secret"}), 401
@@ -35,6 +35,6 @@ def authenticate_request():
     if not auth_service.authenticate(hardware_id, device_secret):
         return jsonify({"error": "Invalid hardware ID or device secret"}), 401
 
-    # Update last_seen_at on successful authentication
-    device_repository.update_last_seen(hardware_id)
+    if update_last_seen:
+        device_repository.update_last_seen(hardware_id)
     return None

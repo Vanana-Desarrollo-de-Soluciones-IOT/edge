@@ -16,7 +16,6 @@ from device.domain.entities import (
 )
 from device.domain.valueobjects import AirQuality, Connectivity, Location, ParticulateMatter
 from device.infrastructure.models import DeviceCommandModel, DeviceTelemetryModel
-from iam.infrastructure.repositories import DeviceRepository
 
 
 class DeviceTelemetryRepository:
@@ -67,9 +66,26 @@ class DeviceTelemetryRepository:
         except DeviceTelemetryModel.DoesNotExist:
             return None
 
-    def find_cached_device_by_hardware_id(self, hardware_id: str):
-        """Resolve the cached IAM device for outbound Core authentication."""
-        return DeviceRepository().find_by_hardware_id(hardware_id)
+    def find_last_telemetry_by_hardware_id(self, hardware_id: str) -> Optional[DeviceTelemetry]:
+        """Find the most recent telemetry record for a device.
+
+        Args:
+            hardware_id: The physical hardware identifier.
+
+        Returns:
+            The most recent DeviceTelemetry entity, or None if no records exist.
+        """
+        try:
+            model = (
+                DeviceTelemetryModel.select()
+                .where(DeviceTelemetryModel.device_id == hardware_id)
+                .order_by(DeviceTelemetryModel.recorded_at.desc())
+                .limit(1)
+                .get()
+            )
+            return self._model_to_entity(model)
+        except DeviceTelemetryModel.DoesNotExist:
+            return None
 
     def _model_to_entity(self, model: DeviceTelemetryModel) -> DeviceTelemetry:
         """Convert a Peewee model instance to a DeviceTelemetry domain entity.

@@ -70,7 +70,7 @@ def create_telemetry_record():
         400: Missing fields, invalid values, or malformed request.
         401: Missing credentials or authentication failure.
     """
-    auth_error = authenticate_request()
+    auth_error = authenticate_request(update_last_seen=True)
     if auth_error is not None:
         return auth_error
 

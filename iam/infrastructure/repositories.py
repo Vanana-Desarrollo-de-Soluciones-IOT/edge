@@ -5,6 +5,7 @@ mapping between Peewee models and domain entities.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from iam.domain.entities import Device
 from iam.infrastructure.models import DeviceModel
@@ -53,11 +54,29 @@ class DeviceRepository:
         Args:
             hardware_id: The physical hardware identifier to update.
         """
-        DeviceModel.update(
-            last_seen_at=datetime.now(timezone.utc)
-        ).where(
+        now = datetime.now(timezone.utc)
+        DeviceModel.update(last_seen_at=now, status="ONLINE").where(
             DeviceModel.hardware_id == hardware_id
         ).execute()
+
+    def mark_offline_stale_devices(self, offline_before: datetime) -> int:
+        """Mark devices as OFFLINE when their last_seen_at is stale.
+
+        Args:
+            offline_before: Devices seen before this UTC timestamp become OFFLINE.
+
+        Returns:
+            Number of updated rows.
+        """
+        return (
+            DeviceModel.update(status="OFFLINE")
+            .where(
+                (DeviceModel.last_seen_at.is_null(False))
+                & (DeviceModel.last_seen_at < offline_before)
+                & (DeviceModel.status != "OFFLINE")
+            )
+            .execute()
+        )
 
     def find_by_hardware_id(self, hardware_id):
         """Find a device by its hardware ID (without validating credentials)."""
