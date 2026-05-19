@@ -39,5 +39,6 @@ class ClairCoreDeviceService:
             "device_id": str(device.get("id") or device.get("device_id")),
             "hardware_id": device.get("hardwareId") or device.get("hardware_id"),
             "api_key": device.get("apiKey") or device.get("api_key"),
+            "device_secret": device.get("deviceSecret") or device.get("device_secret"),
             "status": device.get("status"),
         }

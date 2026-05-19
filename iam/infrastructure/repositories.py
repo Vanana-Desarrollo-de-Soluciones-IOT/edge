@@ -17,25 +17,26 @@ class DeviceRepository:
     Peewee ORM models (infrastructure) and Device domain entities.
     """
 
-    def find_by_id_and_api_key(self, device_id, api_key):
-        """Find a device by its ID and API key combination.
+    def find_by_hardware_id_and_device_secret(self, hardware_id, device_secret):
+        """Find a device by its hardware ID and device secret combination.
 
         Args:
-            device_id: The logical device identifier.
-            api_key: The secret API key to validate.
+            hardware_id: The physical hardware identifier.
+            device_secret: The secret key provided by the physical embedded device.
 
         Returns:
             A Device domain entity if found, None otherwise.
         """
         try:
             model = DeviceModel.get(
-                (DeviceModel.device_id == device_id) &
-                (DeviceModel.api_key == api_key)
+                (DeviceModel.hardware_id == hardware_id) &
+                (DeviceModel.device_secret == device_secret)
             )
             return Device(
                 device_id=model.device_id,
                 hardware_id=model.hardware_id,
                 api_key=model.api_key,
+                device_secret=model.device_secret,
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,
@@ -43,29 +44,30 @@ class DeviceRepository:
         except DeviceModel.DoesNotExist:
             return None
 
-    def update_last_seen(self, device_id):
+    def update_last_seen(self, hardware_id):
         """Update the last_seen_at timestamp for a device.
 
         Called after every successful authentication to track
         device activity and detect offline sensors.
 
         Args:
-            device_id: The logical device identifier to update.
+            hardware_id: The physical hardware identifier to update.
         """
         DeviceModel.update(
             last_seen_at=datetime.now(timezone.utc)
         ).where(
-            DeviceModel.device_id == device_id
+            DeviceModel.hardware_id == hardware_id
         ).execute()
 
-    def find_by_id(self, device_id):
-        """Find a device by its ID (without validating credentials)."""
+    def find_by_hardware_id(self, hardware_id):
+        """Find a device by its hardware ID (without validating credentials)."""
         try:
-            model = DeviceModel.get(DeviceModel.device_id == device_id)
+            model = DeviceModel.get(DeviceModel.hardware_id == hardware_id)
             return Device(
                 device_id=model.device_id,
                 hardware_id=model.hardware_id,
                 api_key=model.api_key,
+                device_secret=model.device_secret,
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,

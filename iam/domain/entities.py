@@ -11,17 +11,19 @@ class Device:
     Attributes:
         device_id: clair-core master device UUID cached locally.
         hardware_id: Physical hardware ID — prevents device cloning.
-        api_key: Secret key for authentication via X-API-Key header.
+        api_key: Secret key for edge -> core authentication.
+        device_secret: Secret key for physical device -> edge authentication.
         status: Device lifecycle state synchronized from clair-core.
         created_at: UTC timestamp of when the device was registered (audit trail).
         last_seen_at: Last time the device sent data — detects offline sensors.
     """
 
-    def __init__(self, device_id, hardware_id, api_key, status, created_at,
+    def __init__(self, device_id, hardware_id, api_key, device_secret, status, created_at,
                  last_seen_at=None):
         self.device_id = device_id
         self.hardware_id = hardware_id
         self.api_key = api_key
+        self.device_secret = device_secret
         self.status = status
         self.created_at = created_at
         self.last_seen_at = last_seen_at

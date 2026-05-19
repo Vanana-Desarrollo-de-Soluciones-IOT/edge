@@ -18,24 +18,23 @@ device_repository = DeviceRepository()
 def authenticate_request():
     """Authenticate the current HTTP request using device credentials.
 
-    Extracts device_id from the JSON body and api_key from the
-    X-API-Key header. Validates credentials and updates last_seen_at
-    on successful authentication.
+    Extracts hardware_id from the X-Hardware-Id header and device_secret
+    from the X-Device-Secret header. Validates credentials and updates
+    last_seen_at on successful authentication.
 
     Returns:
         None if authentication succeeds.
         A (response, status_code) tuple if authentication fails (401).
     """
-    data = request.get_json(silent=True) or {}
-    device_id = data.get("device_id")
-    api_key = request.headers.get("X-API-Key")
+    hardware_id = request.headers.get("X-Hardware-Id")
+    device_secret = request.headers.get("X-Device-Secret")
 
-    if not device_id or not api_key:
-        return jsonify({"error": "Missing device_id or X-API-Key"}), 401
+    if not hardware_id or not device_secret:
+        return jsonify({"error": "Missing X-Hardware-Id or X-Device-Secret"}), 401
 
-    if not auth_service.authenticate(device_id, api_key):
-        return jsonify({"error": "Invalid device_id or API key"}), 401
+    if not auth_service.authenticate(hardware_id, device_secret):
+        return jsonify({"error": "Invalid hardware ID or device secret"}), 401
 
     # Update last_seen_at on successful authentication
-    device_repository.update_last_seen(device_id)
+    device_repository.update_last_seen(hardware_id)
     return None

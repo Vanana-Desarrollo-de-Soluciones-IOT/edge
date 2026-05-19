@@ -20,16 +20,16 @@ def create_telemetry_record():
 
     Headers:
         Content-Type: application/json
-        X-API-Key: <device api key>
+        X-Hardware-Id: <physical hardware identifier>
+        X-Device-Secret: <device secret key>
 
     Body (JSON):
-        device_id (str, required): Logical device identifier.
         co2 (number, required): CO2 concentration in ppm.
         pm25 (number, required): PM2.5 concentration in µg/m³.
         created_at (str, optional): ISO 8601 timestamp; defaults to UTC now.
 
     Returns:
-        201: Record created successfully with id, device_id, co2, pm25, created_at.
+        201: Record created successfully with id, hardware_id, co2, pm25, created_at.
         400: Missing fields, invalid CO2/PM2.5, or malformed timestamp.
         401: Missing credentials or authentication failure.
     """
@@ -40,19 +40,18 @@ def create_telemetry_record():
 
     try:
         data = request.get_json()
-        device_id = data["device_id"]
+        hardware_id = request.headers.get("X-Hardware-Id")
         co2 = data["co2"]
         pm25 = data["pm25"]
         created_at = data.get("created_at")
-        api_key = request.headers.get("X-API-Key")
 
         record = telemetry_service.create_telemetry_record(
-            device_id, co2, pm25, created_at, api_key
+            hardware_id, co2, pm25, created_at
         )
 
         return jsonify({
             "id": record.id,
-            "device_id": record.device_id,
+            "hardware_id": record.device_id,
             "co2": record.co2,
             "pm25": record.pm25,
             "created_at": record.created_at.isoformat(),

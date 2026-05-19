@@ -11,6 +11,16 @@ from shared.infrastructure.environment import get_edge_database_path
 db = SqliteDatabase(get_edge_database_path())
 
 
+def _migrate_device_secret():
+    """Add device_secret column to existing devices table if missing."""
+    from peewee import OperationalError
+    try:
+        db.execute_sql("ALTER TABLE devices ADD COLUMN device_secret TEXT")
+    except OperationalError:
+        # Column already exists
+        pass
+
+
 def init_db():
     """Initialize the database by creating all tables if they don't exist.
 
@@ -24,5 +34,6 @@ def init_db():
         from device.infrastructure.models import DeviceTelemetryModel
 
         db.create_tables([DeviceModel, DeviceTelemetryModel], safe=True)
+        _migrate_device_secret()
     finally:
         db.close()

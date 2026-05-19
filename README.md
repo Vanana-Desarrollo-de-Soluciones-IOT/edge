@@ -87,14 +87,14 @@ Crea un nuevo registro de telemetría ambiental para un dispositivo autenticado.
 
 ```
 Content-Type: application/json
-X-API-Key: <api_key del dispositivo>
+X-Hardware-Id: <hardware-id-del-dispositivo>
+X-Device-Secret: <device-secret-del-dispositivo>
 ```
 
 **Body (JSON):**
 
 ```json
 {
-  "device_id": "<clair-core-device-id>",
   "co2": 420.5,
   "pm25": 35.2,
   "created_at": "2026-05-16T22:30:00-05:00"
@@ -103,7 +103,6 @@ X-API-Key: <api_key del dispositivo>
 
 | Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `device_id` | string | Sí | Identificador del dispositivo |
 | `co2` | number | Sí | Concentración de CO2 en ppm (rango: 0–5000) |
 | `pm25` | number | Sí | Material particulado PM2.5 en µg/m³ (rango: 0–500) |
 | `created_at` | string | No | Timestamp ISO 8601; si se omite usa UTC actual |
@@ -112,7 +111,7 @@ X-API-Key: <api_key del dispositivo>
 
 | Código | Condición | Body |
 |---|---|---|
-| `201` | Registro creado | `{"id": 1, "device_id": "...", "co2": 420.5, "pm25": 35.2, "created_at": "..."}` |
+| `201` | Registro creado | `{"id": 1, "hardware_id": "...", "co2": 420.5, "pm25": 35.2, "created_at": "..."}` |
 | `400` | Campos faltantes o valores inválidos | `{"error": "..."}` |
 | `401` | Credenciales inválidas o dispositivo no autorizado | `{"error": "..."}` |
 
@@ -121,9 +120,9 @@ X-API-Key: <api_key del dispositivo>
 ```bash
 curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
   -H 'Content-Type: application/json' \
-  -H 'X-API-Key: <device-api-key>' \
+  -H 'X-Hardware-Id: CLAIR-0001' \
+  -H 'X-Device-Secret: <device-secret>' \
   -d '{
-    "device_id": "<clair-core-device-id>",
     "co2": 420.5,
     "pm25": 35.2,
     "created_at": "2026-05-16T22:30:00-05:00"

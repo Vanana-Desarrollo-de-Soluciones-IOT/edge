@@ -21,11 +21,17 @@ OPENAPI_SPEC = {
     ],
     "components": {
         "securitySchemes": {
-            "DeviceApiKey": {
+            "DeviceCredentials": {
                 "type": "apiKey",
                 "in": "header",
-                "name": "X-API-Key",
-                "description": "API key synchronized from clair-core for the device.",
+                "name": "X-Hardware-Id",
+                "description": "Physical hardware identifier of the device.",
+            },
+            "DeviceSecret": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Device-Secret",
+                "description": "Device secret key for physical device -> edge authentication.",
             },
             "EdgeToken": {
                 "type": "apiKey",
@@ -37,9 +43,8 @@ OPENAPI_SPEC = {
         "schemas": {
             "CreateTelemetryRequest": {
                 "type": "object",
-                "required": ["device_id", "co2", "pm25"],
+                "required": ["co2", "pm25"],
                 "properties": {
-                    "device_id": {"type": "string", "description": "clair-core device UUID cached by the edge."},
                     "co2": {"type": "number", "format": "float", "minimum": 0, "maximum": 5000, "description": "CO2 concentration in ppm."},
                     "pm25": {"type": "number", "format": "float", "minimum": 0, "maximum": 500, "description": "PM2.5 concentration in micrograms per cubic meter."},
                     "created_at": {"type": "string", "format": "date-time", "description": "Optional measurement timestamp. Defaults to current UTC time."},
@@ -49,22 +54,23 @@ OPENAPI_SPEC = {
                 "type": "object",
                 "properties": {
                     "id": {"type": "integer"},
-                    "device_id": {"type": "string"},
+                    "hardware_id": {"type": "string"},
                     "co2": {"type": "number", "format": "float"},
                     "pm25": {"type": "number", "format": "float"},
                     "created_at": {"type": "string", "format": "date-time"},
                 },
             },
-                "DeviceCacheRecord": {
-                    "type": "object",
-                    "required": ["device_id", "hardware_id", "api_key", "status"],
-                    "properties": {
-                        "device_id": {"type": "string"},
-                        "hardware_id": {"type": "string"},
-                        "api_key": {"type": "string"},
-                        "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "MAINTENANCE", "DECOMMISSIONED"]},
-                    },
+            "DeviceCacheRecord": {
+                "type": "object",
+                "required": ["device_id", "hardware_id", "api_key", "device_secret", "status"],
+                "properties": {
+                    "device_id": {"type": "string"},
+                    "hardware_id": {"type": "string"},
+                    "api_key": {"type": "string"},
+                    "device_secret": {"type": "string"},
+                    "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "MAINTENANCE", "DECOMMISSIONED"]},
                 },
+            },
             "DeviceChangedEvent": {
                 "type": "object",
                 "required": ["event_type", "device"],
@@ -85,7 +91,7 @@ OPENAPI_SPEC = {
                 "tags": ["Telemetry"],
                 "summary": "Create environmental telemetry record",
                 "description": "Authenticates the device locally using the SQLite cache, validates CO2 and PM2.5, and stores the reading.",
-                "security": [{"DeviceApiKey": []}],
+                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
                 "requestBody": {
                     "required": True,
                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTelemetryRequest"}}},
