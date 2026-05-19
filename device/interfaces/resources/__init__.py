@@ -3,6 +3,7 @@
 from device.interfaces.resources.telemetry_request import (
     AirQualityData,
     ConnectivityData,
+    LocationData,
     ParticulateMatterData,
     TelemetryRequest,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "AcknowledgeDeviceCommandRequest",
     "AirQualityData",
     "ConnectivityData",
+    "LocationData",
     "ParticulateMatterData",
     "TelemetryRequest",
     "device_command_to_dict",

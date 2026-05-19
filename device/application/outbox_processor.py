@@ -171,7 +171,13 @@ class TelemetryOutboxProcessor:
             },
             "connectivity": {
                 "status": record.connectivity.status,
+                "network": record.connectivity.network,
+                "signalStrength": record.connectivity.signal_strength,
             },
+            "location": {
+                "country": record.location.country,
+            },
+            "healthStatus": record.health_status,
             "status": record.status,
             "created_at": record.recorded_at.isoformat(),
         }

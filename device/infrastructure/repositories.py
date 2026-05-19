@@ -14,7 +14,7 @@ from device.domain.entities import (
     DeviceTelemetry,
     EdgeDeviceCommandStatus,
 )
-from device.domain.valueobjects import AirQuality, Connectivity, ParticulateMatter
+from device.domain.valueobjects import AirQuality, Connectivity, Location, ParticulateMatter
 from device.infrastructure.models import DeviceCommandModel, DeviceTelemetryModel
 from iam.infrastructure.repositories import DeviceRepository
 
@@ -44,6 +44,10 @@ class DeviceTelemetryRepository:
             pm10=telemetry.particulate_matter.pm10,
             pm_valid=telemetry.particulate_matter.valid,
             wifi_status=telemetry.connectivity.status,
+            network_name=telemetry.connectivity.network,
+            signal_strength=telemetry.connectivity.signal_strength,
+            country=telemetry.location.country,
+            health_status=telemetry.health_status,
             status=telemetry.status,
             recorded_at=telemetry.recorded_at,
         )
@@ -94,6 +98,12 @@ class DeviceTelemetryRepository:
 
         connectivity = Connectivity(
             status=model.wifi_status,
+            network=model.network_name,
+            signal_strength=model.signal_strength,
+        )
+
+        location = Location(
+            country=model.country,
         )
 
         return DeviceTelemetry(
@@ -104,6 +114,8 @@ class DeviceTelemetryRepository:
             air_quality=air_quality,
             particulate_matter=particulate_matter,
             connectivity=connectivity,
+            location=location,
+            health_status=model.health_status,
             status=model.status,
             recorded_at=model.recorded_at,
         )

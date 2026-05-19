@@ -27,6 +27,7 @@ def _migrate_telemetry_schema():
     The optimized payload no longer sends deviceHealth, deviceInfo, or detailed
     connectivity fields. If the old columns are detected, the legacy table is
     dropped so Peewee can create the clean new schema on startup.
+    Also recreates if new required columns (signal_strength, health_status) are missing.
     """
     cursor = db.execute_sql(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='device_telemetry'"
@@ -37,7 +38,14 @@ def _migrate_telemetry_schema():
     # Detect legacy column that does not exist in the optimized schema
     col_cursor = db.execute_sql("PRAGMA table_info(device_telemetry)")
     columns = {row[1] for row in col_cursor.fetchall()}
+    
+    # Drop if legacy columns exist
     if "wifi_ssid" in columns or "free_heap" in columns or "chip_model" in columns:
+        db.execute_sql("DROP TABLE IF EXISTS device_telemetry")
+        return
+    
+    # Drop if new required columns are missing
+    if "signal_strength" not in columns or "health_status" not in columns:
         db.execute_sql("DROP TABLE IF EXISTS device_telemetry")
 
 

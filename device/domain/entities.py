@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from device.domain.valueobjects import AirQuality, Connectivity, ParticulateMatter
+from device.domain.valueobjects import AirQuality, Connectivity, Location, ParticulateMatter
 
 
 class DeviceCommandType(str, Enum):
@@ -31,7 +31,7 @@ class DeviceTelemetry:
     """Aggregate root entity representing an optimized device telemetry reading.
 
     Encapsulates only the data sent by the embedded device in the lightweight
-    payload: environmental sensors, connectivity status, and overall state.
+    payload: environmental sensors, connectivity status, location, health status, and overall state.
 
     Attributes:
         id: Auto-incremented database ID (None before persistence).
@@ -41,6 +41,8 @@ class DeviceTelemetry:
         air_quality: SCD41 CO2/temperature/humidity readings (value object).
         particulate_matter: PMS5003 PM1.0/PM2.5/PM10 readings (value object).
         connectivity: WiFi connection status (value object).
+        location: Device geographical location (value object).
+        health_status: Device health status percentage (0-100).
         status: Overall device status string.
         recorded_at: UTC timestamp when the reading was recorded by edge.
     """
@@ -53,6 +55,8 @@ class DeviceTelemetry:
         air_quality: AirQuality,
         particulate_matter: ParticulateMatter,
         connectivity: Connectivity,
+        location: Location,
+        health_status: int,
         status: str,
         recorded_at: datetime,
         id: Optional[int] = None,
@@ -67,6 +71,10 @@ class DeviceTelemetry:
             raise ValueError("particulate_matter is required")
         if connectivity is None:
             raise ValueError("connectivity is required")
+        if location is None:
+            raise ValueError("location is required")
+        if health_status is None:
+            raise ValueError("health_status is required")
         if not status:
             raise ValueError("status is required")
         if recorded_at is None:
@@ -79,6 +87,8 @@ class DeviceTelemetry:
         self.air_quality = air_quality
         self.particulate_matter = particulate_matter
         self.connectivity = connectivity
+        self.location = location
+        self.health_status = health_status
         self.status = status
         self.recorded_at = recorded_at
 

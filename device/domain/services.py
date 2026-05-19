@@ -11,7 +11,7 @@ from dateutil import parser as dateutil_parser
 
 from device.domain.commands import CreateFullTelemetryRecordCommand
 from device.domain.entities import DeviceTelemetry
-from device.domain.valueobjects import AirQuality, Connectivity, ParticulateMatter
+from device.domain.valueobjects import AirQuality, Connectivity, Location, ParticulateMatter
 
 
 class DeviceTelemetryService:
@@ -33,6 +33,7 @@ class DeviceTelemetryService:
         air_quality = AirQuality.from_dict(command.air_quality)
         particulate_matter = ParticulateMatter.from_dict(command.particulate_matter)
         connectivity = Connectivity.from_dict(command.connectivity)
+        location = Location.from_dict(command.location)
         uptime_seconds = DeviceTelemetryService._parse_uptime(command.uptime)
         recorded_at = DeviceTelemetryService._parse_timestamp(command.created_at)
 
@@ -43,6 +44,8 @@ class DeviceTelemetryService:
             air_quality=air_quality,
             particulate_matter=particulate_matter,
             connectivity=connectivity,
+            location=location,
+            health_status=command.health_status,
             status=command.status,
             recorded_at=recorded_at,
         )

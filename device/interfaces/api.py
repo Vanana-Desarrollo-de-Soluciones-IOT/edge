@@ -38,21 +38,27 @@ def create_telemetry_record():
     Body (JSON) — Optimized Payload:
         {
             "deviceId": "CLAIR-0001",
-            "timestamp": "14:30:25",
-            "uptime": "00:00:20",
+            "timestamp": "16:57:17",
+            "uptime": "00:00:15",
             "airQuality": {
-                "co2": 450,
-                "temperature": 23.5,
-                "humidity": 52.0
+                "co2": 420,
+                "temperature": 24.99893,
+                "humidity": 50
             },
             "particulateMatter": {
-                "pm1_0": 5,
-                "pm2_5": 12,
-                "pm10": 25
+                "pm1_0": 12,
+                "pm2_5": 20,
+                "pm10": 32
             },
             "connectivity": {
-                "status": "connected"
+                "status": "connected",
+                "network": "Wokwi-GUEST",
+                "signalStrength": -65
             },
+            "location": {
+                "country": "PERU"
+            },
+            "healthStatus": 100,
             "status": "Optimal"
         }
 
@@ -87,7 +93,13 @@ def create_telemetry_record():
             },
             connectivity={
                 "status": telemetry_request.connectivity.status,
+                "network": telemetry_request.connectivity.network,
+                "signalStrength": telemetry_request.connectivity.signal_strength,
             },
+            location={
+                "country": telemetry_request.location.country,
+            },
+            health_status=telemetry_request.health_status,
             status=telemetry_request.status,
             created_at=telemetry_request.created_at,
         )
@@ -111,7 +123,13 @@ def create_telemetry_record():
             },
             "connectivity": {
                 "status": record.connectivity.status,
+                "network": record.connectivity.network,
+                "signal_strength": record.connectivity.signal_strength,
             },
+            "location": {
+                "country": record.location.country,
+            },
+            "health_status": record.health_status,
             "status": record.status,
             "recorded_at": record.recorded_at.isoformat(),
         }), 201
