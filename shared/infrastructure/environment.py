@@ -27,6 +27,11 @@ def should_sync_devices_on_startup() -> bool:
 def get_clair_core_devices_url() -> str:
     return _require("CLAIR_CORE_DEVICES_URL")
 
+
+def get_clair_core_evaluations_url() -> str:
+    return _require("CLAIR_CORE_EVALUATIONS_URL")
+
+
 def get_edge_to_core_token() -> str:
     return _require("EDGE_TO_CORE_TOKEN")
 

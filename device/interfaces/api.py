@@ -139,8 +139,8 @@ def create_telemetry_record():
             created_at=telemetry_request.created_at if telemetry_request.created_at else None,
         )
 
-        # Execute use case via application service
-        record = telemetry_service.create_full_telemetry_record(command)
+        # Execute use case via application service (pass raw payload for Core forward)
+        record = telemetry_service.create_full_telemetry_record(command, raw_payload=data)
 
         # Build response with complete data (transformation at boundary)
         return jsonify({
