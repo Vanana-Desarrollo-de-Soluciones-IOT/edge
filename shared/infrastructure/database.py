@@ -52,9 +52,10 @@ def init_db():
         # Deferred imports to avoid circular dependencies
         from iam.infrastructure.models import DeviceModel
         from device.infrastructure.models import DeviceTelemetryModel
+        from device.infrastructure.outbox.outbox_record_model import OutboxRecordModel
 
         _migrate_telemetry_schema()
-        db.create_tables([DeviceModel, DeviceTelemetryModel], safe=True)
+        db.create_tables([DeviceModel, DeviceTelemetryModel, OutboxRecordModel], safe=True)
         _migrate_device_secret()
     finally:
         db.close()

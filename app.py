@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from device.application.outbox_processor import TelemetryOutboxProcessor
 from device.interfaces.api import device_api
 from iam.interfaces.services import iam_api
 from provisioning.application.services.device_provisioning_application_service import DeviceProvisioningApplicationService
@@ -32,6 +33,7 @@ app.register_blueprint(docs_api)
 logger = logging.getLogger(__name__)
 
 _initialized = False
+_outbox_processor = TelemetryOutboxProcessor()
 
 
 @app.after_request
@@ -54,10 +56,11 @@ def add_cors_headers(response):
 
 @app.before_request
 def initialize():
-    """Initialize database and sync clair-core devices on first request."""
+    """Initialize database, start outbox processor, and sync clair-core devices on first request."""
     global _initialized
     if not _initialized:
         init_db()
+        _outbox_processor.start()
         if should_sync_devices_on_startup():
             try:
                 DeviceProvisioningApplicationService().sync_devices_from_core()
