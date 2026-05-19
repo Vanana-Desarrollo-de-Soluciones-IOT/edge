@@ -43,11 +43,69 @@ OPENAPI_SPEC = {
         "schemas": {
             "CreateTelemetryRequest": {
                 "type": "object",
-                "required": ["co2", "pm25"],
+                "required": ["deviceId", "airQuality", "particulateMatter"],
                 "properties": {
-                    "co2": {"type": "number", "format": "float", "minimum": 0, "maximum": 5000, "description": "CO2 concentration in ppm."},
-                    "pm25": {"type": "number", "format": "float", "minimum": 0, "maximum": 500, "description": "PM2.5 concentration in micrograms per cubic meter."},
-                    "created_at": {"type": "string", "format": "date-time", "description": "Optional measurement timestamp. Defaults to current UTC time."},
+                    "deviceId": {"type": "string", "description": "Device identifier (also sent in X-Hardware-Id header)."},
+                    "timestamp": {"type": "integer", "description": "Device uptime in milliseconds."},
+                    "uptime": {"type": "integer", "description": "System uptime in seconds."},
+                    "airQuality": {
+                        "type": "object",
+                        "required": ["co2"],
+                        "properties": {
+                            "co2": {"type": "number", "format": "float", "minimum": 0, "maximum": 5000, "description": "CO2 concentration in ppm."},
+                            "temperature": {"type": "number", "format": "float", "description": "Temperature in Celsius."},
+                            "humidity": {"type": "number", "description": "Relative humidity percentage."},
+                            "valid": {"type": "boolean", "description": "Whether the sensor reading is valid."},
+                        },
+                    },
+                    "particulateMatter": {
+                        "type": "object",
+                        "required": ["pm2_5"],
+                        "properties": {
+                            "pm1_0": {"type": "integer", "description": "PM1.0 concentration in µg/m³."},
+                            "pm2_5": {"type": "number", "minimum": 0, "maximum": 500, "description": "PM2.5 concentration in µg/m³."},
+                            "pm10": {"type": "integer", "description": "PM10 concentration in µg/m³."},
+                            "valid": {"type": "boolean", "description": "Whether the sensor reading is valid."},
+                        },
+                    },
+                    "connectivity": {
+                        "type": "object",
+                        "properties": {
+                            "status": {"type": "string", "description": "WiFi connection status."},
+                            "ssid": {"type": "string", "description": "Connected WiFi network name."},
+                            "ip": {"type": "string", "description": "Device IP address."},
+                            "rssi": {"type": "integer", "description": "Signal strength in dBm."},
+                            "mac": {"type": "string", "description": "MAC address."},
+                            "channel": {"type": "integer", "description": "WiFi channel."},
+                        },
+                    },
+                    "deviceHealth": {
+                        "type": "object",
+                        "properties": {
+                            "freeHeap": {"type": "integer", "description": "Free heap memory in bytes."},
+                            "minFreeHeap": {"type": "integer", "description": "Minimum free heap since boot."},
+                            "heapSize": {"type": "integer", "description": "Total heap size."},
+                            "maxAllocHeap": {"type": "integer", "description": "Maximum allocatable heap."},
+                            "scd41Status": {"type": "string", "description": "SCD41 sensor status."},
+                            "pms5003Status": {"type": "string", "description": "PMS5003 sensor status."},
+                            "lastValidAirQualitySec": {"type": "integer", "description": "Seconds since last valid air quality reading."},
+                            "lastValidPMSec": {"type": "integer", "description": "Seconds since last valid PM reading."},
+                        },
+                    },
+                    "deviceInfo": {
+                        "type": "object",
+                        "properties": {
+                            "chipModel": {"type": "string", "description": "ESP32 chip model."},
+                            "chipRevision": {"type": "integer", "description": "Chip revision number."},
+                            "cpuFreqMHz": {"type": "integer", "description": "CPU frequency in MHz."},
+                            "flashSize": {"type": "integer", "description": "Flash size in bytes."},
+                            "sketchSize": {"type": "integer", "description": "Firmware size in bytes."},
+                            "freeSketchSpace": {"type": "integer", "description": "Free space for firmware updates."},
+                        },
+                    },
+                    "status": {"type": "string", "description": "Overall device status."},
+                    "statusCode": {"type": "integer", "description": "Numeric status code."},
+                    "created_at": {"type": "string", "description": "Optional timestamp override."},
                 },
             },
             "TelemetryResponse": {
