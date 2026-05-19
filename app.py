@@ -72,4 +72,4 @@ def initialize():
 if __name__ == "__main__":
     # Ensure the edge cache is ready even before the first HTTP request.
     initialize()
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
