@@ -44,7 +44,7 @@ OPENAPI_SPEC = {
         "schemas": {
             "CreateTelemetryRequest": {
                 "type": "object",
-                "required": ["deviceId", "timestamp", "uptime", "airQuality", "particulateMatter", "connectivity", "status"],
+                "required": ["deviceId", "timestamp", "uptime", "airQuality", "particulateMatter", "connectivity", "location", "healthStatus", "status"],
                 "properties": {
                     "deviceId": {"type": "string", "description": "Device identifier (also sent in X-Hardware-Id header)."},
                     "timestamp": {"type": "string", "description": "Device local time (e.g., 14:30:25)."},
@@ -72,8 +72,17 @@ OPENAPI_SPEC = {
                         "required": ["status"],
                         "properties": {
                             "status": {"type": "string", "description": "WiFi connection status."},
+                            "network": {"type": "string", "description": "WiFi network name/SSID."},
+                            "signalStrength": {"type": "integer", "description": "WiFi signal strength in dBm (e.g., -65)."},
                         },
                     },
+                    "location": {
+                        "type": "object",
+                        "properties": {
+                            "country": {"type": "string", "description": "Device country location (e.g., PERU)."},
+                        },
+                    },
+                    "healthStatus": {"type": "integer", "minimum": 0, "maximum": 100, "description": "Device health status percentage (0-100)."},
                     "status": {"type": "string", "description": "Overall device status."},
                     "created_at": {"type": "string", "description": "Optional timestamp override."},
                 },
@@ -105,8 +114,17 @@ OPENAPI_SPEC = {
                         "type": "object",
                         "properties": {
                             "status": {"type": "string", "description": "WiFi connection status."},
+                            "network": {"type": "string", "description": "WiFi network name/SSID."},
+                            "signal_strength": {"type": "integer", "description": "WiFi signal strength in dBm."},
                         },
                     },
+                    "location": {
+                        "type": "object",
+                        "properties": {
+                            "country": {"type": "string", "description": "Device country location."},
+                        },
+                    },
+                    "health_status": {"type": "integer", "description": "Device health status percentage (0-100)."},
                     "status": {"type": "string", "description": "Overall device status."},
                     "recorded_at": {"type": "string", "format": "date-time", "description": "UTC timestamp when recorded."},
                 },
@@ -153,6 +171,15 @@ OPENAPI_SPEC = {
                     "device": {"$ref": "#/components/schemas/DeviceCacheRecord"},
                 },
             },
+            "DeviceConnectionStatusResponse": {
+                "type": "object",
+                "properties": {
+                    "hardware_id": {"type": "string", "description": "Physical hardware identifier."},
+                    "status": {"type": "string", "enum": ["ONLINE", "OFFLINE"], "description": "Connection status (ONLINE if telemetry received within 30s, OFFLINE otherwise)."},
+                    "last_seen_at": {"type": "string", "format": "date-time", "nullable": True, "description": "UTC timestamp when device was last seen."},
+                    "seconds_since_last_seen": {"type": "integer", "description": "Seconds elapsed since last telemetry (-1 if never seen)."},
+                },
+            },
             "ErrorResponse": {
                 "type": "object",
                 "properties": {"error": {"type": "string"}},
@@ -174,6 +201,23 @@ OPENAPI_SPEC = {
                     "201": {"description": "Telemetry record created.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TelemetryResponse"}}}},
                     "400": {"description": "Missing fields or invalid telemetry values.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                     "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+        "/api/v1/device/{hardware_id}/connection-status": {
+            "get": {
+                "tags": ["Telemetry"],
+                "summary": "Get device connection status",
+                "description": "Determines if a device is ONLINE or OFFLINE based on the time elapsed since its last telemetry was received. A device is considered OFFLINE if it hasn't sent telemetry in the last 30 seconds.",
+                "security": [{"EdgeToken": []}],
+                "parameters": [
+                    {"name": "hardware_id", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Physical hardware identifier of the device."}
+                ],
+                "responses": {
+                    "200": {"description": "Connection status retrieved successfully.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceConnectionStatusResponse"}}}},
+                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "404": {"description": "Device not found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "400": {"description": "Invalid request.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                 },
             }
         },

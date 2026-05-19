@@ -6,12 +6,14 @@ for creating telemetry data records from authenticated devices.
 
 from flask import Blueprint, jsonify, request
 
+from device.application.queries import GetDeviceConnectionStatusQueryHandler
 from device.application.services import DeviceCommandApplicationService, DeviceTelemetryAppService
 from device.domain.commands import (
     AcknowledgeEmbeddedDeviceCommandCommand,
     CreateFullTelemetryRecordCommand,
     SynchronizeDeviceCommandsCommand,
 )
+from device.domain.queries import GetDeviceConnectionStatusQuery
 from device.interfaces.resources import (
     AcknowledgeDeviceCommandRequest,
     TelemetryRequest,
@@ -24,6 +26,7 @@ device_api = Blueprint("device_api", __name__)
 
 telemetry_service = DeviceTelemetryAppService()
 command_service = DeviceCommandApplicationService()
+connection_status_query_handler = GetDeviceConnectionStatusQueryHandler()
 
 
 @device_api.route("/api/v1/device/telemetry", methods=["POST"])
@@ -236,3 +239,47 @@ def acknowledge_embedded_device_command(command_id):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Unable to acknowledge command: {str(e)}"}), 400
+
+
+@device_api.route("/api/v1/device/<hardware_id>/connection-status", methods=["GET"])
+def get_device_connection_status(hardware_id):
+    """Get the connection status of a device (online/offline).
+
+    Determines if a device is ONLINE or OFFLINE based on the time elapsed
+    since its last telemetry was received. A device is considered OFFLINE
+    if it hasn't sent telemetry in the last 30 seconds.
+
+    Headers:
+        X-Edge-Token: shared edge/core token for authentication.
+
+    Args:
+        hardware_id: Physical hardware identifier of the device.
+
+    Returns:
+        200: Connection status with last seen timestamp.
+            {
+                "hardware_id": "CLAIR-0001",
+                "status": "ONLINE",
+                "last_seen_at": "2024-01-15T10:30:00Z",
+                "seconds_since_last_seen": 15
+            }
+        401: Missing or invalid edge token.
+        404: Device not found.
+    """
+    if request.headers.get("X-Edge-Token") != get_edge_to_core_token():
+        return jsonify({"error": "Invalid or missing X-Edge-Token"}), 401
+
+    try:
+        query = GetDeviceConnectionStatusQuery(hardware_id=hardware_id)
+        status = connection_status_query_handler.handle(query)
+
+        return jsonify({
+            "hardware_id": status.hardware_id,
+            "status": status.status,
+            "last_seen_at": status.last_seen_at.isoformat() if status.last_seen_at else None,
+            "seconds_since_last_seen": status.seconds_since_last_seen,
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": f"Unable to get connection status: {str(e)}"}), 400
