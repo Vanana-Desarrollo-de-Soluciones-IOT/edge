@@ -147,6 +147,8 @@ Variables relevantes:
 
 Este proyecto soporta archivo `.env` (cargado al iniciar via `python-dotenv`). Usa `.env.example` como base.
 
+s
+
 ## Inspeccionar la Base de Datos
 
 ```bash
