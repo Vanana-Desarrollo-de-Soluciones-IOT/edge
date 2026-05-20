@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from device.application.command_sync_processor import CommandSyncProcessor
 from device.application.outbox_processor import TelemetryOutboxProcessor
 from device.interfaces.api import device_api
 from iam.application.device_presence_monitor import DevicePresenceMonitor
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 _initialized = False
 _outbox_processor = TelemetryOutboxProcessor()
+_command_sync_processor = CommandSyncProcessor()
 _device_presence_monitor = DevicePresenceMonitor()
 
 
@@ -63,6 +65,7 @@ def initialize():
     if not _initialized:
         init_db()
         _outbox_processor.start()
+        _command_sync_processor.start()
         _device_presence_monitor.start()
         if should_sync_devices_on_startup():
             try:
