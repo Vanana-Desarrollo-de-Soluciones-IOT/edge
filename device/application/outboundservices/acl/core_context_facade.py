@@ -39,3 +39,8 @@ class CoreContextFacade(ABC):
     ) -> bool:
         """Acknowledge command execution back to clair-core."""
         ...
+
+    @abstractmethod
+    def publish_device_presence_changed(self, payload: dict) -> bool:
+        """Publish a device presence transition detected by the edge."""
+        ...

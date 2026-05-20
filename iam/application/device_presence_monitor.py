@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from iam.infrastructure.repositories import DeviceRepository
+from iam.application.services import DevicePresenceApplicationService
 from shared.infrastructure.database import db
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class DevicePresenceMonitor:
     POLL_INTERVAL_SECONDS = 5
 
     def __init__(self) -> None:
-        self.device_repository = DeviceRepository()
+        self.device_presence_service = DevicePresenceApplicationService()
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
@@ -42,7 +42,7 @@ class DevicePresenceMonitor:
                 offline_before = datetime.now(timezone.utc) - timedelta(
                     seconds=self.OFFLINE_THRESHOLD_SECONDS
                 )
-                updated = self.device_repository.mark_offline_stale_devices(offline_before)
+                updated = self.device_presence_service.mark_stale_devices_offline(offline_before)
                 if updated:
                     logger.info("Marked %s stale devices OFFLINE", updated)
             except Exception:

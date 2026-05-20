@@ -11,6 +11,7 @@ from device.application.outboundservices.acl.core_context_facade import (
 from shared.infrastructure.environment import (
     get_clair_core_device_command_ack_url,
     get_clair_core_device_commands_pending_url,
+    get_clair_core_device_presence_events_url,
     get_clair_core_evaluations_url,
     get_edge_to_core_token,
 )
@@ -107,4 +108,30 @@ class CoreContextFacadeImpl(CoreContextFacade):
             return False
         except (URLError, TimeoutError) as exc:
             logger.warning("Unable to ACK clair-core device command: %s", exc)
+            return False
+
+    def publish_device_presence_changed(self, payload: dict) -> bool:
+        """POST edge-detected device presence changes to clair-core."""
+        body = json.dumps(payload).encode("utf-8")
+        request = Request(
+            get_clair_core_device_presence_events_url(),
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Edge-Token": get_edge_to_core_token(),
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                return 200 <= response.status < 300
+        except HTTPError as exc:
+            logger.warning(
+                "Core returned HTTP %s for presence event: %s",
+                exc.code,
+                exc.read().decode("utf-8", errors="replace")[:200],
+            )
+            return False
+        except (URLError, TimeoutError) as exc:
+            logger.warning("Unable to publish device presence event: %s", exc)
             return False

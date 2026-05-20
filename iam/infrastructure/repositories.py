@@ -46,37 +46,51 @@ class DeviceRepository:
             return None
 
     def update_last_seen(self, hardware_id):
-        """Update the last_seen_at timestamp for a device.
+        """Update last_seen_at and mark the device ONLINE.
 
-        Called after every successful authentication to track
-        device activity and detect offline sensors.
+        Returns the updated device only when the status changed to ONLINE.
 
         Args:
             hardware_id: The physical hardware identifier to update.
         """
+        device = self.find_by_hardware_id(hardware_id)
+        if device is None:
+            return None
+
         now = datetime.now(timezone.utc)
         DeviceModel.update(last_seen_at=now, status="ONLINE").where(
             DeviceModel.hardware_id == hardware_id
         ).execute()
 
-    def mark_offline_stale_devices(self, offline_before: datetime) -> int:
+        if device.status == "ONLINE":
+            return None
+        return self.find_by_hardware_id(hardware_id)
+
+    def mark_offline_stale_devices(self, offline_before: datetime) -> list[Device]:
         """Mark devices as OFFLINE when their last_seen_at is stale.
 
         Args:
             offline_before: Devices seen before this UTC timestamp become OFFLINE.
 
         Returns:
-            Number of updated rows.
+            Devices whose status changed to OFFLINE.
         """
-        return (
-            DeviceModel.update(status="OFFLINE")
-            .where(
+        stale_models = list(
+            DeviceModel.select().where(
                 (DeviceModel.last_seen_at.is_null(False))
                 & (DeviceModel.last_seen_at < offline_before)
                 & (DeviceModel.status != "OFFLINE")
             )
-            .execute()
         )
+        if not stale_models:
+            return []
+
+        hardware_ids = [model.hardware_id for model in stale_models]
+        DeviceModel.update(status="OFFLINE").where(
+            DeviceModel.hardware_id.in_(hardware_ids)
+        ).execute()
+
+        return [self.find_by_hardware_id(hardware_id) for hardware_id in hardware_ids]
 
     def find_by_hardware_id(self, hardware_id):
         """Find a device by its hardware ID (without validating credentials)."""

@@ -6,13 +6,12 @@ that other bounded contexts use to validate device credentials.
 
 from flask import Blueprint, jsonify, request
 
-from iam.application.services import AuthApplicationService
-from iam.infrastructure.repositories import DeviceRepository
+from iam.application.services import AuthApplicationService, DevicePresenceApplicationService
 
 iam_api = Blueprint("iam_api", __name__)
 
 auth_service = AuthApplicationService()
-device_repository = DeviceRepository()
+device_presence_service = DevicePresenceApplicationService()
 
 
 def authenticate_request(update_last_seen: bool = False):
@@ -36,5 +35,5 @@ def authenticate_request(update_last_seen: bool = False):
         return jsonify({"error": "Invalid hardware ID or device secret"}), 401
 
     if update_last_seen:
-        device_repository.update_last_seen(hardware_id)
+        device_presence_service.mark_seen(hardware_id)
     return None

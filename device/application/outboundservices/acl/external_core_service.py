@@ -54,3 +54,7 @@ class ExternalCoreService:
             status,
             failure_reason,
         )
+
+    def publish_device_presence_changed(self, payload: dict) -> bool:
+        """Publish a device presence transition to clair-core."""
+        return self._facade.publish_device_presence_changed(payload)
