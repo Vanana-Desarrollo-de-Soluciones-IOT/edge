@@ -18,6 +18,7 @@ OPENAPI_SPEC = {
     "tags": [
         {"name": "Telemetry", "description": "Environmental telemetry ingestion from IoT sensors."},
         {"name": "Provisioning", "description": "Device cache synchronization from clair-core."},
+        {"name": "Commands", "description": "Core-to-edge command synchronization and embedded device delivery."},
     ],
     "components": {
         "securitySchemes": {
@@ -43,7 +44,7 @@ OPENAPI_SPEC = {
         "schemas": {
             "CreateTelemetryRequest": {
                 "type": "object",
-                "required": ["deviceId", "timestamp", "uptime", "airQuality", "particulateMatter", "connectivity", "status"],
+                "required": ["deviceId", "timestamp", "uptime", "airQuality", "particulateMatter", "connectivity", "location", "healthStatus", "status"],
                 "properties": {
                     "deviceId": {"type": "string", "description": "Device identifier (also sent in X-Hardware-Id header)."},
                     "timestamp": {"type": "string", "description": "Device local time (e.g., 14:30:25)."},
@@ -71,8 +72,17 @@ OPENAPI_SPEC = {
                         "required": ["status"],
                         "properties": {
                             "status": {"type": "string", "description": "WiFi connection status."},
+                            "network": {"type": "string", "description": "WiFi network name/SSID."},
+                            "signalStrength": {"type": "integer", "description": "WiFi signal strength in dBm (e.g., -65)."},
                         },
                     },
+                    "location": {
+                        "type": "object",
+                        "properties": {
+                            "country": {"type": "string", "description": "Device country location (e.g., PERU)."},
+                        },
+                    },
+                    "healthStatus": {"type": "integer", "minimum": 0, "maximum": 100, "description": "Device health status percentage (0-100)."},
                     "status": {"type": "string", "description": "Overall device status."},
                     "created_at": {"type": "string", "description": "Optional timestamp override."},
                 },
@@ -104,8 +114,17 @@ OPENAPI_SPEC = {
                         "type": "object",
                         "properties": {
                             "status": {"type": "string", "description": "WiFi connection status."},
+                            "network": {"type": "string", "description": "WiFi network name/SSID."},
+                            "signal_strength": {"type": "integer", "description": "WiFi signal strength in dBm."},
                         },
                     },
+                    "location": {
+                        "type": "object",
+                        "properties": {
+                            "country": {"type": "string", "description": "Device country location."},
+                        },
+                    },
+                    "health_status": {"type": "integer", "description": "Device health status percentage (0-100)."},
                     "status": {"type": "string", "description": "Overall device status."},
                     "recorded_at": {"type": "string", "format": "date-time", "description": "UTC timestamp when recorded."},
                 },
@@ -118,7 +137,30 @@ OPENAPI_SPEC = {
                     "hardware_id": {"type": "string"},
                     "api_key": {"type": "string"},
                     "device_secret": {"type": "string"},
-                    "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "MAINTENANCE", "DECOMMISSIONED"]},
+                    "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "STANDBY", "ERROR", "MAINTENANCE", "DECOMMISSIONED"]},
+                },
+            },
+            "DeviceCommand": {
+                "type": "object",
+                "properties": {
+                    "commandId": {"type": "string"},
+                    "deviceId": {"type": "string"},
+                    "hardwareId": {"type": "string"},
+                    "type": {"type": "string", "enum": ["STANDBY", "WAKE", "RESTART"]},
+                    "status": {"type": "string", "enum": ["RECEIVED", "DELIVERED_TO_EMBEDDED", "EXECUTED", "FAILED"]},
+                    "payload": {"type": "string", "nullable": True},
+                    "receivedAt": {"type": "string", "format": "date-time"},
+                    "deliveredAt": {"type": "string", "format": "date-time", "nullable": True},
+                    "acknowledgedAt": {"type": "string", "format": "date-time", "nullable": True},
+                    "failureReason": {"type": "string", "nullable": True},
+                },
+            },
+            "AcknowledgeDeviceCommandRequest": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                    "status": {"type": "string", "enum": ["EXECUTED", "FAILED"]},
+                    "failureReason": {"type": "string"},
                 },
             },
             "DeviceChangedEvent": {
@@ -127,6 +169,15 @@ OPENAPI_SPEC = {
                 "properties": {
                     "event_type": {"type": "string", "example": "DeviceChanged"},
                     "device": {"$ref": "#/components/schemas/DeviceCacheRecord"},
+                },
+            },
+            "DeviceConnectionStatusResponse": {
+                "type": "object",
+                "properties": {
+                    "hardware_id": {"type": "string", "description": "Physical hardware identifier."},
+                    "status": {"type": "string", "enum": ["ONLINE", "OFFLINE"], "description": "Connection status (ONLINE if telemetry received within 30s, OFFLINE otherwise)."},
+                    "last_seen_at": {"type": "string", "format": "date-time", "nullable": True, "description": "UTC timestamp when device was last seen."},
+                    "seconds_since_last_seen": {"type": "integer", "description": "Seconds elapsed since last telemetry (-1 if never seen)."},
                 },
             },
             "ErrorResponse": {
@@ -153,6 +204,23 @@ OPENAPI_SPEC = {
                 },
             }
         },
+        "/api/v1/device/{hardware_id}/connection-status": {
+            "get": {
+                "tags": ["Telemetry"],
+                "summary": "Get device connection status",
+                "description": "Determines if a device is ONLINE or OFFLINE based on the time elapsed since its last telemetry was received. A device is considered OFFLINE if it hasn't sent telemetry in the last 30 seconds.",
+                "security": [{"EdgeToken": []}],
+                "parameters": [
+                    {"name": "hardware_id", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Physical hardware identifier of the device."}
+                ],
+                "responses": {
+                    "200": {"description": "Connection status retrieved successfully.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceConnectionStatusResponse"}}}},
+                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "404": {"description": "Device not found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "400": {"description": "Invalid request.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
         "/api/v1/provisioning/devices/events": {
             "post": {
                 "tags": ["Provisioning"],
@@ -167,6 +235,49 @@ OPENAPI_SPEC = {
                     "200": {"description": "Local device cache updated."},
                     "400": {"description": "Missing fields or invalid payload.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                     "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+        "/api/v1/device/commands/sync": {
+            "post": {
+                "tags": ["Commands"],
+                "summary": "Synchronize pending commands from clair-core",
+                "description": "Fetches commands from clair-core, caches them locally, and makes them available for embedded devices.",
+                "security": [{"EdgeToken": []}],
+                "responses": {
+                    "200": {"description": "Commands synchronized."},
+                    "400": {"description": "Invalid request or core response.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+        "/api/v1/device/commands/pending": {
+            "get": {
+                "tags": ["Commands"],
+                "summary": "Get pending commands for embedded device",
+                "description": "Authenticates the embedded device and returns locally cached commands, marking them as delivered.",
+                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "responses": {
+                    "200": {"description": "Pending commands returned."},
+                    "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+        "/api/v1/device/commands/{commandId}/ack": {
+            "post": {
+                "tags": ["Commands"],
+                "summary": "Acknowledge embedded command execution",
+                "description": "Persists the embedded ACK locally and forwards it to clair-core.",
+                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "parameters": [{"name": "commandId", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "requestBody": {
+                    "required": True,
+                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AcknowledgeDeviceCommandRequest"}}},
+                },
+                "responses": {
+                    "200": {"description": "Command acknowledged.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceCommand"}}}},
+                    "400": {"description": "Invalid ACK or unknown command.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                 },
             }
         },

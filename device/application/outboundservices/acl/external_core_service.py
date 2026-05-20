@@ -35,3 +35,26 @@ class ExternalCoreService:
             True if the Core acknowledged the telemetry, False otherwise.
         """
         return self._facade.forward_telemetry(api_key, payload)
+
+    def fetch_pending_device_commands(self, limit: int) -> list[dict]:
+        """Fetch pending device commands from clair-core."""
+        return self._facade.fetch_pending_device_commands(limit)
+
+    def acknowledge_device_command(
+        self,
+        device_id: str,
+        command_id: str,
+        status: str,
+        failure_reason: str | None = None,
+    ) -> bool:
+        """Forward a command acknowledgement to clair-core."""
+        return self._facade.acknowledge_device_command(
+            device_id,
+            command_id,
+            status,
+            failure_reason,
+        )
+
+    def publish_device_presence_changed(self, payload: dict) -> bool:
+        """Publish a device presence transition to clair-core."""
+        return self._facade.publish_device_presence_changed(payload)

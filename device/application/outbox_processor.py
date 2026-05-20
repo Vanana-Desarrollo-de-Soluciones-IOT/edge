@@ -4,7 +4,6 @@ Implements the outbox pattern with exponential backoff and circuit breaker
 protection for forwarding telemetry payloads to clair-core.
 """
 
-import json
 import logging
 import threading
 import time
@@ -16,10 +15,12 @@ from device.application.outboundservices.acl.external_core_service import (
 )
 from device.domain.outbox_entry import OutboxEntry
 from device.infrastructure.outbox.outbox_repository import OutboxRepository
+from device.infrastructure.repositories import DeviceTelemetryRepository
 from device.infrastructure.reliability.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerOpenException,
 )
+from iam.infrastructure.repositories import DeviceRepository
 from shared.infrastructure.database import db
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ class TelemetryOutboxProcessor:
 
     def __init__(self) -> None:
         self.outbox_repository = OutboxRepository()
+        self.telemetry_repository = DeviceTelemetryRepository()
+        self.device_repository = DeviceRepository()
         self.external_core_service = ExternalCoreService()
         self.circuit_breaker = CircuitBreaker(
             failure_threshold=3, recovery_timeout=30.0
@@ -108,11 +111,11 @@ class TelemetryOutboxProcessor:
         Returns:
             True if sent successfully, False otherwise.
         """
-        payload = json.loads(entry.payload)
+        payload, api_key = self._build_payload_and_api_key(entry)
         try:
             self.circuit_breaker.call(
                 self.external_core_service.forward_raw_payload,
-                entry.api_key,
+                api_key,
                 payload,
             )
             self.outbox_repository.mark_sent(entry.id)
@@ -140,6 +143,54 @@ class TelemetryOutboxProcessor:
                     next_retry.isoformat(),
                 )
             return False
+
+    def _build_payload_and_api_key(self, entry: OutboxEntry) -> tuple[dict, str]:
+        """Rebuild the outbound payload from the aggregate referenced by outbox."""
+        if entry.aggregate_type != "TELEMETRY" or entry.event_type != "TELEMETRY_RECORDED":
+            raise ValueError(f"Unsupported outbox event: {entry.aggregate_type}/{entry.event_type}")
+
+        record = self.telemetry_repository.find_by_id(entry.aggregate_id)
+        if record is None:
+            raise ValueError(f"Telemetry record not found: {entry.aggregate_id}")
+
+        device = self.device_repository.find_by_hardware_id(record.device_id)
+        if device is None:
+            raise ValueError(f"Cached device not found: {record.device_id}")
+
+        payload = {
+            "deviceId": record.device_id,
+            "timestamp": record.device_time,
+            "uptime": self._format_uptime(record.uptime_seconds),
+            "airQuality": {
+                "co2": record.air_quality.co2,
+                "temperature": record.air_quality.temperature,
+                "humidity": record.air_quality.humidity,
+            },
+            "particulateMatter": {
+                "pm1_0": record.particulate_matter.pm1_0,
+                "pm2_5": record.particulate_matter.pm2_5,
+                "pm10": record.particulate_matter.pm10,
+            },
+            "connectivity": {
+                "status": record.connectivity.status,
+                "network": record.connectivity.network,
+                "signalStrength": record.connectivity.signal_strength,
+            },
+            "location": {
+                "country": record.location.country,
+            },
+            "healthStatus": record.health_status,
+            "status": record.status,
+            "created_at": record.recorded_at.isoformat(),
+        }
+        return payload, device.api_key
+
+    def _format_uptime(self, uptime_seconds: int) -> str:
+        """Format uptime seconds as HH:MM:SS for clair-core compatibility."""
+        hours = uptime_seconds // 3600
+        minutes = (uptime_seconds % 3600) // 60
+        seconds = uptime_seconds % 60
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def _calculate_next_retry(self, retry_count: int) -> datetime:
         """Calculate next retry timestamp using exponential backoff.

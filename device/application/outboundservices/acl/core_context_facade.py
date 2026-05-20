@@ -23,3 +23,24 @@ class CoreContextFacade(ABC):
             True if the Core acknowledged the telemetry (2xx), False otherwise.
         """
         ...
+
+    @abstractmethod
+    def fetch_pending_device_commands(self, limit: int) -> list[dict]:
+        """Fetch pending commands from clair-core for edge delivery."""
+        ...
+
+    @abstractmethod
+    def acknowledge_device_command(
+        self,
+        device_id: str,
+        command_id: str,
+        status: str,
+        failure_reason: str | None = None,
+    ) -> bool:
+        """Acknowledge command execution back to clair-core."""
+        ...
+
+    @abstractmethod
+    def publish_device_presence_changed(self, payload: dict) -> bool:
+        """Publish a device presence transition detected by the edge."""
+        ...

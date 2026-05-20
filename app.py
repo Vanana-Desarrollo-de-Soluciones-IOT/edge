@@ -13,6 +13,7 @@ load_dotenv()
 
 from device.application.outbox_processor import TelemetryOutboxProcessor
 from device.interfaces.api import device_api
+from iam.application.device_presence_monitor import DevicePresenceMonitor
 from iam.interfaces.services import iam_api
 from provisioning.application.services.device_provisioning_application_service import DeviceProvisioningApplicationService
 from provisioning.interfaces.api import provisioning_api
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 _initialized = False
 _outbox_processor = TelemetryOutboxProcessor()
+_device_presence_monitor = DevicePresenceMonitor()
 
 
 @app.after_request
@@ -61,6 +63,7 @@ def initialize():
     if not _initialized:
         init_db()
         _outbox_processor.start()
+        _device_presence_monitor.start()
         if should_sync_devices_on_startup():
             try:
                 DeviceProvisioningApplicationService().sync_devices_from_core()
@@ -72,4 +75,4 @@ def initialize():
 if __name__ == "__main__":
     # Ensure the edge cache is ready even before the first HTTP request.
     initialize()
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

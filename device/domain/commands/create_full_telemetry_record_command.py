@@ -18,7 +18,9 @@ class CreateFullTelemetryRecordCommand:
         uptime: System uptime as string (e.g., "00:00:20").
         air_quality: Dict with co2, temperature, humidity.
         particulate_matter: Dict with pm1_0, pm2_5, pm10.
-        connectivity: Dict with status.
+        connectivity: Dict with status, network, signalStrength.
+        location: Dict with country.
+        health_status: Device health status percentage (0-100).
         status: Overall device status string.
         created_at: Optional timestamp override.
     """
@@ -28,6 +30,8 @@ class CreateFullTelemetryRecordCommand:
     air_quality: dict
     particulate_matter: dict
     connectivity: dict
+    location: dict
+    health_status: int
     status: str
     created_at: Optional[str] = None
 
@@ -44,5 +48,9 @@ class CreateFullTelemetryRecordCommand:
             raise ValueError("particulate_matter must be a dict")
         if not isinstance(self.connectivity, dict):
             raise ValueError("connectivity must be a dict")
+        if not isinstance(self.location, dict):
+            raise ValueError("location must be a dict")
+        if self.health_status is None:
+            raise ValueError("health_status is required")
         if not self.status:
             raise ValueError("status is required")

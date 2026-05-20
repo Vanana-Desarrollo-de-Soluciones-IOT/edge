@@ -21,9 +21,9 @@ class OutboxRecordModel(Model):
     """Peewee model representing the 'device_outbox' table."""
 
     id = AutoField()
-    device_id = CharField(index=True)
-    payload = TextField()
-    api_key = CharField()
+    aggregate_type = CharField(index=True)
+    aggregate_id = IntegerField(index=True)
+    event_type = CharField(index=True)
     status = CharField(default="pending")  # pending | sent | dead_letter
     retry_count = IntegerField(default=0)
     next_retry_at = DateTimeField()
@@ -36,4 +36,5 @@ class OutboxRecordModel(Model):
         table_name = "device_outbox"
         indexes = (
             (("status", "next_retry_at"), False),
+            (("aggregate_type", "aggregate_id"), False),
         )

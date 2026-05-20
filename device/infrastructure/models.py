@@ -6,7 +6,6 @@ with only the fields present in the optimized embedded device payload.
 
 from peewee import (
     AutoField,
-    BooleanField,
     CharField,
     DateTimeField,
     FloatField,
@@ -22,7 +21,7 @@ class DeviceTelemetryModel(Model):
 
     Stores optimized telemetry readings with only the fields sent by
     the embedded device: environmental sensors, connectivity status,
-    and overall device state.
+    location, health status, and overall device state.
     """
 
     id = AutoField()
@@ -35,14 +34,18 @@ class DeviceTelemetryModel(Model):
     co2 = FloatField()
     temperature = FloatField()
     humidity = FloatField()
-    air_quality_valid = BooleanField(default=True)
 
     pm1_0 = IntegerField()
     pm2_5 = IntegerField()
     pm10 = IntegerField()
-    pm_valid = BooleanField(default=True)
 
     wifi_status = CharField()
+    network_name = CharField(default="")     # WiFi network/SSID (e.g., "Wokwi-GUEST")
+    signal_strength = IntegerField(default=0)  # WiFi signal strength in dBm (e.g., -65)
+
+    country = CharField(default="")          # Device location country (e.g., "PERU")
+
+    health_status = IntegerField(default=100)  # Device health status percentage (0-100)
 
     status = CharField()
 
@@ -53,4 +56,26 @@ class DeviceTelemetryModel(Model):
         table_name = 'device_telemetry'
         indexes = (
             (('device_id', 'recorded_at'), False),
+        )
+
+
+class DeviceCommandModel(Model):
+    """Peewee model representing edge-local device commands."""
+
+    command_id = CharField(primary_key=True)
+    device_id = CharField(index=True)
+    hardware_id = CharField(index=True)
+    command_type = CharField()
+    status = CharField(index=True)
+    payload = CharField(null=True)
+    received_at = DateTimeField()
+    delivered_at = DateTimeField(null=True)
+    acknowledged_at = DateTimeField(null=True)
+    failure_reason = CharField(null=True)
+
+    class Meta:
+        database = db
+        table_name = 'device_commands'
+        indexes = (
+            (('hardware_id', 'status'), False),
         )

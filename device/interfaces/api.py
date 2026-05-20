@@ -6,14 +6,27 @@ for creating telemetry data records from authenticated devices.
 
 from flask import Blueprint, jsonify, request
 
-from device.application.services import DeviceTelemetryAppService
-from device.domain.commands import CreateFullTelemetryRecordCommand
-from device.interfaces.resources import TelemetryRequest
+from device.application.queries import GetDeviceConnectionStatusQueryHandler
+from device.application.services import DeviceCommandApplicationService, DeviceTelemetryAppService
+from device.domain.commands import (
+    AcknowledgeEmbeddedDeviceCommandCommand,
+    CreateFullTelemetryRecordCommand,
+    SynchronizeDeviceCommandsCommand,
+)
+from device.domain.queries import GetDeviceConnectionStatusQuery
+from device.interfaces.resources import (
+    AcknowledgeDeviceCommandRequest,
+    TelemetryRequest,
+    device_command_to_dict,
+)
 from iam.interfaces.services import authenticate_request
+from shared.infrastructure.environment import get_edge_to_core_token
 
 device_api = Blueprint("device_api", __name__)
 
 telemetry_service = DeviceTelemetryAppService()
+command_service = DeviceCommandApplicationService()
+connection_status_query_handler = GetDeviceConnectionStatusQueryHandler()
 
 
 @device_api.route("/api/v1/device/telemetry", methods=["POST"])
@@ -28,21 +41,27 @@ def create_telemetry_record():
     Body (JSON) — Optimized Payload:
         {
             "deviceId": "CLAIR-0001",
-            "timestamp": "14:30:25",
-            "uptime": "00:00:20",
+            "timestamp": "16:57:17",
+            "uptime": "00:00:15",
             "airQuality": {
-                "co2": 450,
-                "temperature": 23.5,
-                "humidity": 52.0
+                "co2": 420,
+                "temperature": 24.99893,
+                "humidity": 50
             },
             "particulateMatter": {
-                "pm1_0": 5,
-                "pm2_5": 12,
-                "pm10": 25
+                "pm1_0": 12,
+                "pm2_5": 20,
+                "pm10": 32
             },
             "connectivity": {
-                "status": "connected"
+                "status": "connected",
+                "network": "Wokwi-GUEST",
+                "signalStrength": -65
             },
+            "location": {
+                "country": "PERU"
+            },
+            "healthStatus": 100,
             "status": "Optimal"
         }
 
@@ -51,7 +70,7 @@ def create_telemetry_record():
         400: Missing fields, invalid values, or malformed request.
         401: Missing credentials or authentication failure.
     """
-    auth_error = authenticate_request()
+    auth_error = authenticate_request(update_last_seen=True)
     if auth_error is not None:
         return auth_error
 
@@ -77,7 +96,13 @@ def create_telemetry_record():
             },
             connectivity={
                 "status": telemetry_request.connectivity.status,
+                "network": telemetry_request.connectivity.network,
+                "signalStrength": telemetry_request.connectivity.signal_strength,
             },
+            location={
+                "country": telemetry_request.location.country,
+            },
+            health_status=telemetry_request.health_status,
             status=telemetry_request.status,
             created_at=telemetry_request.created_at,
         )
@@ -101,7 +126,13 @@ def create_telemetry_record():
             },
             "connectivity": {
                 "status": record.connectivity.status,
+                "network": record.connectivity.network,
+                "signal_strength": record.connectivity.signal_strength,
             },
+            "location": {
+                "country": record.location.country,
+            },
+            "health_status": record.health_status,
             "status": record.status,
             "recorded_at": record.recorded_at.isoformat(),
         }), 201
@@ -112,3 +143,143 @@ def create_telemetry_record():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Invalid request format: {str(e)}"}), 400
+
+
+@device_api.route("/api/v1/device/commands/sync", methods=["POST"])
+def synchronize_device_commands():
+    """Synchronize pending device commands from clair-core into the edge cache.
+
+    Headers:
+        X-Edge-Token: shared edge/core token.
+
+    Query Parameters:
+        limit: optional max number of commands to fetch, defaults to 100.
+
+    Returns:
+        200: Commands synchronized and cached locally.
+        401: Missing or invalid edge token.
+        400: Invalid limit or core response shape.
+    """
+    if request.headers.get("X-Edge-Token") != get_edge_to_core_token():
+        return jsonify({"error": "Invalid or missing X-Edge-Token"}), 401
+
+    try:
+        limit = int(request.args.get("limit", 100))
+        commands = command_service.synchronize_pending_commands(
+            SynchronizeDeviceCommandsCommand(limit=limit)
+        )
+        return jsonify({
+            "count": len(commands),
+            "commands": [device_command_to_dict(command) for command in commands],
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Unable to synchronize commands: {str(e)}"}), 400
+
+
+@device_api.route("/api/v1/device/commands/pending", methods=["GET"])
+def get_pending_device_commands_for_embedded():
+    """Return commands pending for the authenticated embedded device.
+
+    Headers:
+        X-Hardware-Id: physical hardware identifier.
+        X-Device-Secret: embedded device secret.
+
+    Returns:
+        200: Pending commands, marked as delivered to the embedded device.
+        401: Missing or invalid device credentials.
+    """
+    auth_error = authenticate_request()
+    if auth_error is not None:
+        return auth_error
+
+    hardware_id = request.headers.get("X-Hardware-Id")
+    commands = command_service.get_pending_commands_for_embedded(hardware_id)
+    return jsonify({
+        "count": len(commands),
+        "commands": [device_command_to_dict(command) for command in commands],
+    }), 200
+
+
+@device_api.route("/api/v1/device/commands/<command_id>/ack", methods=["POST"])
+def acknowledge_embedded_device_command(command_id):
+    """Acknowledge command execution from the authenticated embedded device.
+
+    Headers:
+        X-Hardware-Id: physical hardware identifier.
+        X-Device-Secret: embedded device secret.
+
+    Body:
+        {"status": "EXECUTED"}
+        {"status": "FAILED", "failureReason": "Embedded timeout"}
+
+    Returns:
+        200: ACK persisted locally and forwarded to clair-core when reachable.
+        400: Invalid body or unknown command.
+        401: Missing or invalid device credentials.
+    """
+    auth_error = authenticate_request()
+    if auth_error is not None:
+        return auth_error
+
+    try:
+        ack_request = AcknowledgeDeviceCommandRequest.from_dict(request.get_json())
+        hardware_id = request.headers.get("X-Hardware-Id")
+        command = command_service.acknowledge_embedded_command(
+            AcknowledgeEmbeddedDeviceCommandCommand(
+                hardware_id=hardware_id,
+                command_id=command_id,
+                status=ack_request.status,
+                failure_reason=ack_request.failure_reason,
+            )
+        )
+        return jsonify(device_command_to_dict(command)), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Unable to acknowledge command: {str(e)}"}), 400
+
+
+@device_api.route("/api/v1/device/<hardware_id>/connection-status", methods=["GET"])
+def get_device_connection_status(hardware_id):
+    """Get the connection status of a device (online/offline).
+
+    Determines if a device is ONLINE or OFFLINE based on the time elapsed
+    since its last telemetry was received. A device is considered OFFLINE
+    if it hasn't sent telemetry in the last 30 seconds.
+
+    Headers:
+        X-Edge-Token: shared edge/core token for authentication.
+
+    Args:
+        hardware_id: Physical hardware identifier of the device.
+
+    Returns:
+        200: Connection status with last seen timestamp.
+            {
+                "hardware_id": "CLAIR-0001",
+                "status": "ONLINE",
+                "last_seen_at": "2024-01-15T10:30:00Z",
+                "seconds_since_last_seen": 15
+            }
+        401: Missing or invalid edge token.
+        404: Device not found.
+    """
+    if request.headers.get("X-Edge-Token") != get_edge_to_core_token():
+        return jsonify({"error": "Invalid or missing X-Edge-Token"}), 401
+
+    try:
+        query = GetDeviceConnectionStatusQuery(hardware_id=hardware_id)
+        status = connection_status_query_handler.handle(query)
+
+        return jsonify({
+            "hardware_id": status.hardware_id,
+            "status": status.status,
+            "last_seen_at": status.last_seen_at.isoformat() if status.last_seen_at else None,
+            "seconds_since_last_seen": status.seconds_since_last_seen,
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": f"Unable to get connection status: {str(e)}"}), 400

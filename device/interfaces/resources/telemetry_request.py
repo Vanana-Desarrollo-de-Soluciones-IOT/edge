@@ -42,13 +42,29 @@ class ParticulateMatterData:
 
 @dataclass
 class ConnectivityData:
-    """WiFi connectivity status (lightweight)."""
+    """WiFi connectivity status."""
     status: str
+    network: str = ""
+    signal_strength: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> "ConnectivityData":
         return cls(
             status=str(data.get("status", "unknown")),
+            network=str(data.get("network", "")),
+            signal_strength=int(data.get("signalStrength", 0)),
+        )
+
+
+@dataclass
+class LocationData:
+    """Device geographical location."""
+    country: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "LocationData":
+        return cls(
+            country=str(data.get("country", "")),
         )
 
 
@@ -59,11 +75,13 @@ class TelemetryRequest:
     Maps the lightweight JSON payload:
     {
       "deviceId": "CLAIR-0001",
-      "timestamp": "14:30:25",
-      "uptime": "00:00:20",
-      "airQuality": {"co2": 450, "temperature": 23.5, "humidity": 52.0},
-      "particulateMatter": {"pm1_0": 5, "pm2_5": 12, "pm10": 25},
-      "connectivity": {"status": "connected"},
+      "timestamp": "16:57:17",
+      "uptime": "00:00:15",
+      "airQuality": {"co2": 420, "temperature": 24.99893, "humidity": 50},
+      "particulateMatter": {"pm1_0": 12, "pm2_5": 20, "pm10": 32},
+      "connectivity": {"status": "connected", "network": "Wokwi-GUEST", "signalStrength": -65},
+      "location": {"country": "PERU"},
+      "healthStatus": 100,
       "status": "Optimal"
     }
     """
@@ -73,6 +91,8 @@ class TelemetryRequest:
     air_quality: AirQualityData
     particulate_matter: ParticulateMatterData
     connectivity: ConnectivityData
+    location: LocationData
+    health_status: int
     status: str
     created_at: Optional[str] = None
 
@@ -89,6 +109,8 @@ class TelemetryRequest:
             air_quality=AirQualityData.from_dict(data.get("airQuality", {})),
             particulate_matter=ParticulateMatterData.from_dict(data.get("particulateMatter", {})),
             connectivity=ConnectivityData.from_dict(data.get("connectivity", {})),
+            location=LocationData.from_dict(data.get("location", {})),
+            health_status=int(data.get("healthStatus", 100)),
             status=str(data.get("status", "unknown")),
             created_at=data.get("created_at") if data.get("created_at") else None,
         )
