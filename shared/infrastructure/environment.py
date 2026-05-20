@@ -16,6 +16,11 @@ def _require(name: str) -> str:
     return value
 
 
+def _optional(name: str, default: str) -> str:
+    value = os.getenv(name, "").strip()
+    return value if value else default
+
+
 def get_edge_database_path() -> str:
     return os.getenv("EDGE_DATABASE_PATH", "clair_edge.db").strip() or "clair_edge.db"
 
@@ -24,42 +29,43 @@ def should_sync_devices_on_startup() -> bool:
     return os.getenv("EDGE_SYNC_DEVICES_ON_STARTUP", "true").lower() == "true"
 
 
+def get_clair_core_base_url() -> str:
+    return _require("CLAIR_CORE_BASE_URL").rstrip("/")
+
+
 def get_clair_core_devices_url() -> str:
-    return _require("CLAIR_CORE_DEVICES_URL")
+    return _optional(
+        "CLAIR_CORE_DEVICES_URL",
+        f"{get_clair_core_base_url()}/api/v1/devices/provisioning",
+    )
 
 
 def get_clair_core_evaluations_url() -> str:
-    return _require("CLAIR_CORE_EVALUATIONS_URL")
+    return _optional(
+        "CLAIR_CORE_EVALUATIONS_URL",
+        f"{get_clair_core_base_url()}/api/v1/evaluations/telemetry",
+    )
 
 
 def get_clair_core_device_commands_pending_url() -> str:
-    configured = os.getenv("CLAIR_CORE_DEVICE_COMMANDS_PENDING_URL", "").strip()
-    if configured:
-        return configured
-    devices_url = get_clair_core_devices_url().rstrip("/")
-    if devices_url.endswith("/provisioning"):
-        devices_url = devices_url[: -len("/provisioning")]
-    return f"{devices_url}/commands/pending"
+    return _optional(
+        "CLAIR_CORE_DEVICE_COMMANDS_PENDING_URL",
+        f"{get_clair_core_base_url()}/api/v1/devices/commands/pending",
+    )
 
 
 def get_clair_core_device_command_ack_url(device_id: str, command_id: str) -> str:
     template = os.getenv("CLAIR_CORE_DEVICE_COMMAND_ACK_URL_TEMPLATE", "").strip()
     if template:
         return template.format(device_id=device_id, command_id=command_id)
-    devices_url = get_clair_core_devices_url().rstrip("/")
-    if devices_url.endswith("/provisioning"):
-        devices_url = devices_url[: -len("/provisioning")]
-    return f"{devices_url}/{device_id}/commands/{command_id}/ack"
+    return f"{get_clair_core_base_url()}/api/v1/devices/{device_id}/commands/{command_id}/ack"
 
 
 def get_clair_core_device_presence_events_url() -> str:
-    configured = os.getenv("CLAIR_CORE_DEVICE_PRESENCE_EVENTS_URL", "").strip()
-    if configured:
-        return configured
-    devices_url = get_clair_core_devices_url().rstrip("/")
-    if devices_url.endswith("/provisioning"):
-        devices_url = devices_url[: -len("/provisioning")]
-    return f"{devices_url}/presence/events"
+    return _optional(
+        "CLAIR_CORE_DEVICE_PRESENCE_EVENTS_URL",
+        f"{get_clair_core_base_url()}/api/v1/devices/presence/events",
+    )
 
 
 def get_edge_to_core_token() -> str:
