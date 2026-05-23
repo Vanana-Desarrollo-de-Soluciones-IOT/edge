@@ -28,6 +28,10 @@ class KafkaPresencePublisher:
         Returns:
             True if Kafka accepted the record, False otherwise.
         """
+        if self._producer is None:
+            logger.warning("Kafka producer unavailable; presence event skipped")
+            return False
+
         try:
             hardware_id = payload.get("hardware_id", "unknown")
             self._producer.send(

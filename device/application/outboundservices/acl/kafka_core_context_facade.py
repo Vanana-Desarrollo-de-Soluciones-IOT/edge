@@ -25,6 +25,9 @@ class KafkaCoreContextFacadeImpl(CoreContextFacade):
 
     def publish_telemetry_recorded(self, payload: dict) -> bool:
         """Publish telemetry to Kafka topic clair.device.telemetry.recorded."""
+        if self._producer is None:
+            logger.warning("Kafka producer unavailable; telemetry publish skipped")
+            return False
         try:
             hardware_id = payload.get("hardware_id", "unknown")
             self._producer.send(
@@ -39,6 +42,9 @@ class KafkaCoreContextFacadeImpl(CoreContextFacade):
 
     def publish_command_acknowledged(self, payload: dict) -> bool:
         """Publish command ACK to Kafka topic clair.device.commands.acknowledged."""
+        if self._producer is None:
+            logger.warning("Kafka producer unavailable; command ACK publish skipped")
+            return False
         try:
             command_id = payload.get("command_id", "unknown")
             self._producer.send(

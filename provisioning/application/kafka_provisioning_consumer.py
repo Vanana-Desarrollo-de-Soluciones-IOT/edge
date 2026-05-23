@@ -84,5 +84,5 @@ class KafkaProvisioningConsumer:
         logger.info(
             "Provisioned device %s via Kafka (change_type=%s)",
             payload.get("device_id") or payload.get("hardware_id"),
-            payload.get("change_type", "UNKNOWN"),
+            payload.get("change_type") or payload.get("changeType") or "UNKNOWN",
         )

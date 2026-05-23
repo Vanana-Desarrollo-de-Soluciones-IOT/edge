@@ -36,7 +36,12 @@ class DeviceProvisioningApplicationService:
     def _normalize_payload(payload: dict) -> dict:
         """Normalize Kafka payload keys to the local cache schema."""
         return {
-            "device_id": str(payload.get("device_id") or payload.get("id")),
+            # Core emits snake_case after the latest update, but accept both casings.
+            "device_id": str(
+                payload.get("device_id")
+                or payload.get("deviceId")
+                or payload.get("id")
+            ),
             "hardware_id": payload.get("hardware_id") or payload.get("hardwareId"),
             "api_key": payload.get("api_key") or payload.get("apiKey") or "",
             "status": payload.get("status"),
