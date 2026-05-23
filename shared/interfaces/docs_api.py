@@ -27,11 +27,11 @@ OPENAPI_SPEC = {
                 "name": "X-Hardware-Id",
                 "description": "Physical hardware identifier of the device.",
             },
-            "DeviceSecret": {
+            "DeviceApiKey": {
                 "type": "apiKey",
                 "in": "header",
-                "name": "X-Device-Secret",
-                "description": "Device secret key for physical device -> edge authentication.",
+                "name": "X-API-Key",
+                "description": "Device API key for physical device -> edge authentication.",
             },
         },
         "schemas": {
@@ -124,12 +124,11 @@ OPENAPI_SPEC = {
             },
             "DeviceCacheRecord": {
                 "type": "object",
-                "required": ["device_id", "hardware_id", "api_key", "device_secret", "status"],
+                "required": ["device_id", "hardware_id", "api_key", "status"],
                 "properties": {
                     "device_id": {"type": "string"},
                     "hardware_id": {"type": "string"},
                     "api_key": {"type": "string"},
-                    "device_secret": {"type": "string"},
                     "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "STANDBY", "ERROR", "MAINTENANCE", "DECOMMISSIONED"]},
                 },
             },
@@ -185,7 +184,7 @@ OPENAPI_SPEC = {
                 "tags": ["Telemetry"],
                 "summary": "Create environmental telemetry record",
                 "description": "Authenticates the device locally using the SQLite cache, validates sensor readings (CO2, PM, temperature, humidity), and stores the optimized telemetry record with connectivity status.",
-                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
                 "requestBody": {
                     "required": True,
                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTelemetryRequest"}}},
@@ -218,7 +217,7 @@ OPENAPI_SPEC = {
                 "tags": ["Commands"],
                 "summary": "Get pending commands for embedded device",
                 "description": "Authenticates the embedded device and returns locally cached commands, marking them as delivered.",
-                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
                 "responses": {
                     "200": {"description": "Pending commands returned."},
                     "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
@@ -230,7 +229,7 @@ OPENAPI_SPEC = {
                 "tags": ["Commands"],
                 "summary": "Acknowledge embedded command execution",
                 "description": "Persists the embedded ACK locally and publishes it to Kafka for clair-core.",
-                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
                 "parameters": [{"name": "commandId", "in": "path", "required": True, "schema": {"type": "string"}}],
                 "requestBody": {
                     "required": True,

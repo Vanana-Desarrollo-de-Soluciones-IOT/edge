@@ -17,8 +17,8 @@ device_presence_service = DevicePresenceApplicationService()
 def authenticate_request(update_last_seen: bool = False):
     """Authenticate the current HTTP request using device credentials.
 
-    Extracts hardware_id from the X-Hardware-Id header and device_secret
-    from the X-Device-Secret header. Validates credentials and updates
+    Extracts hardware_id from the X-Hardware-Id header and api_key
+    from the X-API-Key header. Validates credentials and updates
     last_seen_at on successful authentication.
 
     Returns:
@@ -26,13 +26,13 @@ def authenticate_request(update_last_seen: bool = False):
         A (response, status_code) tuple if authentication fails (401).
     """
     hardware_id = request.headers.get("X-Hardware-Id", "").strip()
-    device_secret = request.headers.get("X-Device-Secret", "").strip()
+    api_key = request.headers.get("X-API-Key", "").strip()
 
-    if not hardware_id or not device_secret:
-        return jsonify({"error": "Missing X-Hardware-Id or X-Device-Secret"}), 401
+    if not hardware_id or not api_key:
+        return jsonify({"error": "Missing X-Hardware-Id or X-API-Key"}), 401
 
-    if not auth_service.authenticate(hardware_id, device_secret):
-        return jsonify({"error": "Invalid hardware ID or device secret"}), 401
+    if not auth_service.authenticate(hardware_id, api_key):
+        return jsonify({"error": "Invalid hardware ID or API key"}), 401
 
     if update_last_seen:
         device_presence_service.mark_seen(hardware_id)

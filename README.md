@@ -88,7 +88,7 @@ Crea un nuevo registro de telemetría ambiental para un dispositivo autenticado.
 ```
 Content-Type: application/json
 X-Hardware-Id: <hardware-id-del-dispositivo>
-X-Device-Secret: <device-secret-del-dispositivo>
+X-API-Key: <api-key-del-dispositivo>
 ```
 
 **Body (JSON):**
@@ -121,7 +121,7 @@ X-Device-Secret: <device-secret-del-dispositivo>
 curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
   -H 'Content-Type: application/json' \
   -H 'X-Hardware-Id: CLAIR-0001' \
-  -H 'X-Device-Secret: <device-secret>' \
+  -H 'X-API-Key: <api-key>' \
   -d '{
     "co2": 420.5,
     "pm25": 35.2,

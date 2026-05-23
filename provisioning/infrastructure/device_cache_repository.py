@@ -17,7 +17,6 @@ class DeviceCacheRepository:
                 device_id=device["device_id"],
                 hardware_id=device["hardware_id"],
                 api_key=device["api_key"],
-                device_secret=device["device_secret"],
                 status=device["status"],
                 created_at=now,
                 last_seen_at=None,
@@ -27,7 +26,6 @@ class DeviceCacheRepository:
                 update={
                     DeviceModel.hardware_id: device["hardware_id"],
                     DeviceModel.api_key: device["api_key"],
-                    DeviceModel.device_secret: device["device_secret"],
                     DeviceModel.status: device["status"],
                 },
             ).execute()

@@ -23,7 +23,7 @@ class DeviceProvisioningApplicationService:
         """Process a single DeviceChanged integration event from Kafka.
 
         Args:
-            payload: Dict with device_id, hardware_id, api_key, device_secret, status.
+            payload: Dict with device_id, hardware_id, api_key, status.
 
         Returns:
             Number of records updated (0 or 1).
@@ -39,6 +39,5 @@ class DeviceProvisioningApplicationService:
             "device_id": str(payload.get("device_id") or payload.get("id")),
             "hardware_id": payload.get("hardware_id") or payload.get("hardwareId"),
             "api_key": payload.get("api_key") or payload.get("apiKey") or "",
-            "device_secret": payload.get("device_secret") or payload.get("deviceSecret") or "",
             "status": payload.get("status"),
         }

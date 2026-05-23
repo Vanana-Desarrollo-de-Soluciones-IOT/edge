@@ -14,7 +14,6 @@ class DeviceChangedIntegrationEvent:
     device_id: str
     hardware_id: str
     api_key: str
-    device_secret: str
     status: str
     change_type: str  # CREATED | UPDATED | DELETED
     changed_at: str

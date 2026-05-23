@@ -34,7 +34,7 @@ def create_telemetry_record():
     Headers:
         Content-Type: application/json
         X-Hardware-Id: <physical hardware identifier>
-        X-Device-Secret: <device secret key>
+        X-API-Key: <device secret key>
 
     Body (JSON) — Optimized Payload:
         {
@@ -149,7 +149,7 @@ def get_pending_device_commands_for_embedded():
 
     Headers:
         X-Hardware-Id: physical hardware identifier.
-        X-Device-Secret: embedded device secret.
+        X-API-Key: embedded device secret.
 
     Returns:
         200: Pending commands, marked as delivered to the embedded device.
@@ -173,7 +173,7 @@ def acknowledge_embedded_device_command(command_id):
 
     Headers:
         X-Hardware-Id: physical hardware identifier.
-        X-Device-Secret: embedded device secret.
+        X-API-Key: embedded device secret.
 
     Body:
         {"status": "EXECUTED"}

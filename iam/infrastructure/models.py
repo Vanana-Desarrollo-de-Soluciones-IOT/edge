@@ -14,8 +14,7 @@ class DeviceModel(Model):
     Columns:
         device_id: Primary key — logical device identifier.
         hardware_id: Unique physical hardware ID.
-        api_key: Secret authentication key for edge -> core communication.
-        device_secret: Secret authentication key for physical device -> edge communication.
+        api_key: Secret authentication key for physical device -> edge communication.
         status: Lifecycle state synchronized from clair-core.
         created_at: Registration timestamp.
         last_seen_at: Last telemetry timestamp (nullable).
@@ -24,7 +23,6 @@ class DeviceModel(Model):
     device_id = CharField(primary_key=True)
     hardware_id = CharField(unique=True)
     api_key = CharField()
-    device_secret = CharField()
     status = CharField()
     created_at = DateTimeField()
     last_seen_at = DateTimeField(null=True)
