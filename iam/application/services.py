@@ -7,7 +7,7 @@ with infrastructure repositories.
 import logging
 from datetime import datetime, timezone
 
-from device.application.outboundservices.acl.external_core_service import ExternalCoreService
+from iam.application.outboundservices.acl.kafka_presence_publisher import KafkaPresencePublisher
 from iam.domain.events import DevicePresenceChangedEvent
 from iam.domain.services import AuthService
 from iam.infrastructure.repositories import DeviceRepository
@@ -26,26 +26,26 @@ class AuthApplicationService:
         self.device_repository = DeviceRepository()
         self.auth_service = AuthService()
 
-    def authenticate(self, hardware_id, device_secret):
-        """Authenticate a physical device by its hardware ID and device secret.
+    def authenticate(self, hardware_id, api_key):
+        """Authenticate a physical device by its hardware ID and api key.
 
         Args:
             hardware_id: The physical hardware identifier.
-            device_secret: The secret key provided by the physical embedded device.
+            api_key: The secret key provided by the physical embedded device.
 
         Returns:
             True if the device exists and is allowed by its synchronized status.
         """
-        device = self.device_repository.find_by_hardware_id_and_device_secret(hardware_id, device_secret)
+        device = self.device_repository.find_by_hardware_id_and_api_key(hardware_id, api_key)
         return self.auth_service.authenticate(device)
 
 
 class DevicePresenceApplicationService:
-    """Application service for publishing edge-detected presence transitions."""
+    """Application service for publishing edge-detected presence transitions via Kafka."""
 
     def __init__(self):
         self.device_repository = DeviceRepository()
-        self.external_core_service = ExternalCoreService()
+        self.kafka_presence_publisher = KafkaPresencePublisher()
 
     def mark_seen(self, hardware_id: str) -> None:
         """Mark a device ONLINE from telemetry and publish the transition if needed."""
@@ -71,12 +71,12 @@ class DevicePresenceApplicationService:
             occurred_at=occurred_at,
         )
         payload = {
-            "deviceId": event.device_id,
-            "hardwareId": event.hardware_id,
+            "device_id": event.device_id,
+            "hardware_id": event.hardware_id,
             "status": event.status,
-            "occurredAt": event.occurred_at.isoformat(),
+            "occurred_at": event.occurred_at.isoformat(),
         }
-        if not self.external_core_service.publish_device_presence_changed(payload):
+        if not self.kafka_presence_publisher.publish_device_presence_changed(payload):
             logger.warning(
                 "Failed to publish %s presence event for hardware_id=%s",
                 event.status,

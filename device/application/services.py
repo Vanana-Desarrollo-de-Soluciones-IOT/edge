@@ -2,16 +2,15 @@
 
 Orchestrates telemetry record creation by coordinating cross-context
 device verification, domain validation, local persistence, and guaranteed
-outbound delivery to clair-core via the outbox pattern.
+outbound delivery to clair-core via the outbox pattern and Kafka.
 """
 
 import logging
 from datetime import datetime, timezone
 
-from device.domain.commands import CreateFullTelemetryRecordCommand
 from device.domain.commands import (
     AcknowledgeEmbeddedDeviceCommandCommand,
-    SynchronizeDeviceCommandsCommand,
+    CreateFullTelemetryRecordCommand,
 )
 from device.domain.entities import (
     DeviceCommand,
@@ -35,7 +34,7 @@ class DeviceTelemetryAppService:
 
     Coordinates between IAM (device verification), Device domain
     (telemetry validation), Device infrastructure (local persistence),
-    and the outbox (guaranteed forward to clair-core).
+    and the outbox (guaranteed forward to clair-core via Kafka).
     """
 
     def __init__(self):
@@ -51,9 +50,9 @@ class DeviceTelemetryAppService:
     ) -> DeviceTelemetry:
         """Create, persist locally, and queue for core delivery a telemetry record.
 
-        The raw payload is written to the outbox table within the same
-        database transaction as the telemetry record, ensuring at-least-once
-        delivery without blocking the device response.
+        The outbox entry is written within the same database transaction
+        as the telemetry record, ensuring at-least-once Kafka delivery
+        without blocking the device response.
 
         Args:
             command: CreateFullTelemetryRecordCommand with device telemetry data.
@@ -65,15 +64,12 @@ class DeviceTelemetryAppService:
         Raises:
             ValueError: If device not found, or any validation fails.
         """
-        # Verify device exists in IAM
         device = self.device_repository.find_by_hardware_id(command.hardware_id)
         if device is None:
             raise ValueError(f"Device not found: {command.hardware_id}")
 
-        # Create the telemetry entity via domain service
         record = self.telemetry_service.create_record_from_command(command)
 
-        # Persist locally and enqueue a lightweight outbox reference atomically.
         with db.atomic():
             persisted = self.telemetry_repository.save(record)
 
@@ -92,27 +88,33 @@ class DeviceTelemetryAppService:
 
 
 class DeviceCommandApplicationService:
-    """Application service for Core -> Edge -> Embedded command delivery."""
+    """Application service for Core -> Edge -> Embedded command delivery via Kafka."""
 
     def __init__(self):
         self.command_repository = DeviceCommandRepository()
         self.device_repository = DeviceRepository()
         self.external_core_service = ExternalCoreService()
 
-    def synchronize_pending_commands(self, command: SynchronizeDeviceCommandsCommand) -> list[DeviceCommand]:
-        """Fetch pending commands from clair-core and cache them locally."""
-        core_commands = self.external_core_service.fetch_pending_device_commands(command.limit)
+    def ingest_command_messages(self, messages: list[dict]) -> list[DeviceCommand]:
+        """Persist command integration events from Kafka into the local cache.
+
+        Args:
+            messages: Raw dict payloads from the Kafka consumer.
+
+        Returns:
+            List of persisted or existing DeviceCommand entities.
+        """
         persisted: list[DeviceCommand] = []
 
         with db.atomic():
-            for item in core_commands:
+            for item in messages:
                 device_id = item.get("deviceId") or item.get("device_id")
                 command_id = item.get("id") or item.get("commandId") or item.get("command_id")
                 command_type = item.get("type") or item.get("commandType") or item.get("command_type")
                 payload = item.get("payload")
 
                 if not device_id or not command_id or not command_type:
-                    logger.warning("Skipping malformed command from core: %s", item)
+                    logger.warning("Skipping malformed command from Kafka: %s", item)
                     continue
 
                 device = self.device_repository.find_by_device_id(device_id)
@@ -144,7 +146,7 @@ class DeviceCommandApplicationService:
         return self.command_repository.mark_commands_delivered(commands)
 
     def acknowledge_embedded_command(self, command: AcknowledgeEmbeddedDeviceCommandCommand) -> DeviceCommand:
-        """Persist embedded ACK locally and forward it to clair-core."""
+        """Persist embedded ACK locally and publish it to Kafka for clair-core."""
         device_command = self.command_repository.find_by_command_id(command.command_id)
         if device_command is None or device_command.hardware_id != command.hardware_id:
             raise ValueError("Device command not found")
@@ -156,12 +158,16 @@ class DeviceCommandApplicationService:
             device_command.mark_failed(acknowledged_at, command.failure_reason)
 
         saved = self.command_repository.save(device_command)
-        acknowledged = self.external_core_service.acknowledge_device_command(
-            saved.device_id,
-            saved.command_id,
-            command.status,
-            command.failure_reason,
-        )
-        if not acknowledged:
-            logger.warning("Core ACK forwarding failed for command %s", saved.command_id)
+
+        payload = {
+            "device_id": saved.device_id,
+            "hardware_id": saved.hardware_id,
+            "command_id": saved.command_id,
+            "status": command.status,
+            "failure_reason": command.failure_reason,
+            "acknowledged_at": acknowledged_at.isoformat(),
+        }
+        published = self.external_core_service.publish_command_acknowledged(payload)
+        if not published:
+            logger.warning("Kafka ACK publish failed for command %s", saved.command_id)
         return saved

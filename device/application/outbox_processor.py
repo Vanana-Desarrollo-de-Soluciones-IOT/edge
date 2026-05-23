@@ -1,7 +1,7 @@
-"""TelemetryOutboxProcessor — background worker for guaranteed core delivery.
+"""TelemetryOutboxProcessor — background worker for guaranteed Kafka delivery.
 
 Implements the outbox pattern with exponential backoff and circuit breaker
-protection for forwarding telemetry payloads to clair-core.
+protection for publishing telemetry integration events to Kafka.
 """
 
 import logging
@@ -20,17 +20,16 @@ from device.infrastructure.reliability.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerOpenException,
 )
-from iam.infrastructure.repositories import DeviceRepository
 from shared.infrastructure.database import db
 
 logger = logging.getLogger(__name__)
 
 
 class TelemetryOutboxProcessor:
-    """Background processor that polls the outbox and forwards payloads to core.
+    """Background processor that polls the outbox and publishes to Kafka.
 
     Guarantees at-least-once delivery by retrying with exponential backoff.
-    Protects the core from overload via circuit breaker.
+    Protects Kafka from overload via circuit breaker.
     """
 
     MAX_RETRIES = 5
@@ -43,7 +42,6 @@ class TelemetryOutboxProcessor:
     def __init__(self) -> None:
         self.outbox_repository = OutboxRepository()
         self.telemetry_repository = DeviceTelemetryRepository()
-        self.device_repository = DeviceRepository()
         self.external_core_service = ExternalCoreService()
         self.circuit_breaker = CircuitBreaker(
             failure_threshold=3, recovery_timeout=30.0
@@ -84,7 +82,7 @@ class TelemetryOutboxProcessor:
             time.sleep(self.POLL_INTERVAL_SECONDS)
 
     def _process_batch(self) -> None:
-        """Fetch and attempt to send pending outbox entries."""
+        """Fetch and attempt to publish pending outbox entries to Kafka."""
         entries = self.outbox_repository.find_pending(limit=self.BATCH_SIZE)
         if not entries:
             return
@@ -103,23 +101,22 @@ class TelemetryOutboxProcessor:
                 )
 
     def _send_entry(self, entry: OutboxEntry) -> bool:
-        """Attempt to forward a single outbox entry to clair-core.
+        """Attempt to publish a single outbox entry to Kafka.
 
         Args:
-            entry: OutboxEntry to send.
+            entry: OutboxEntry to publish.
 
         Returns:
-            True if sent successfully, False otherwise.
+            True if published successfully, False otherwise.
         """
-        payload, api_key = self._build_payload_and_api_key(entry)
+        payload = self._build_payload(entry)
         try:
             self.circuit_breaker.call(
-                self.external_core_service.forward_raw_payload,
-                api_key,
+                self.external_core_service.publish_telemetry_recorded,
                 payload,
             )
             self.outbox_repository.mark_sent(entry.id)
-            logger.info("Outbox entry %s forwarded to core", entry.id)
+            logger.info("Outbox entry %s published to Kafka", entry.id)
             return True
         except CircuitBreakerOpenException:
             raise
@@ -144,8 +141,8 @@ class TelemetryOutboxProcessor:
                 )
             return False
 
-    def _build_payload_and_api_key(self, entry: OutboxEntry) -> tuple[dict, str]:
-        """Rebuild the outbound payload from the aggregate referenced by outbox."""
+    def _build_payload(self, entry: OutboxEntry) -> dict:
+        """Rebuild the outbound integration event payload from the aggregate."""
         if entry.aggregate_type != "TELEMETRY" or entry.event_type != "TELEMETRY_RECORDED":
             raise ValueError(f"Unsupported outbox event: {entry.aggregate_type}/{entry.event_type}")
 
@@ -153,44 +150,25 @@ class TelemetryOutboxProcessor:
         if record is None:
             raise ValueError(f"Telemetry record not found: {entry.aggregate_id}")
 
-        device = self.device_repository.find_by_hardware_id(record.device_id)
-        if device is None:
-            raise ValueError(f"Cached device not found: {record.device_id}")
-
-        payload = {
-            "deviceId": record.device_id,
-            "timestamp": record.device_time,
-            "uptime": self._format_uptime(record.uptime_seconds),
-            "airQuality": {
-                "co2": record.air_quality.co2,
-                "temperature": record.air_quality.temperature,
-                "humidity": record.air_quality.humidity,
-            },
-            "particulateMatter": {
-                "pm1_0": record.particulate_matter.pm1_0,
-                "pm2_5": record.particulate_matter.pm2_5,
-                "pm10": record.particulate_matter.pm10,
-            },
-            "connectivity": {
-                "status": record.connectivity.status,
-                "network": record.connectivity.network,
-                "signalStrength": record.connectivity.signal_strength,
-            },
-            "location": {
-                "country": record.location.country,
-            },
-            "healthStatus": record.health_status,
+        return {
+            "device_id": record.device_id,
+            "device_time": record.device_time,
+            "uptime_seconds": record.uptime_seconds,
+            "co2": record.air_quality.co2,
+            "temperature": record.air_quality.temperature,
+            "humidity": record.air_quality.humidity,
+            "pm1_0": record.particulate_matter.pm1_0,
+            "pm2_5": record.particulate_matter.pm2_5,
+            "pm10": record.particulate_matter.pm10,
+            "wifi_status": record.connectivity.status,
+            "network_name": record.connectivity.network,
+            "signal_strength": record.connectivity.signal_strength,
+            "country": record.location.country,
+            "health_status": record.health_status,
             "status": record.status,
-            "created_at": record.recorded_at.isoformat(),
+            "recorded_at": record.recorded_at.isoformat(),
+            "occurred_at": datetime.now(timezone.utc).isoformat(),
         }
-        return payload, device.api_key
-
-    def _format_uptime(self, uptime_seconds: int) -> str:
-        """Format uptime seconds as HH:MM:SS for clair-core compatibility."""
-        hours = uptime_seconds // 3600
-        minutes = (uptime_seconds % 3600) // 60
-        seconds = uptime_seconds % 60
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def _calculate_next_retry(self, retry_count: int) -> datetime:
         """Calculate next retry timestamp using exponential backoff.

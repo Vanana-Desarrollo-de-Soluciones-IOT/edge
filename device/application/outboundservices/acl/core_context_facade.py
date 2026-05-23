@@ -1,46 +1,36 @@
-"""CoreContextFacade — ACL interface for clair-core Evaluation context.
+"""CoreContextFacade — ACL interface for clair-core messaging via Kafka.
 
-Defines the contract that the edge service uses to forward telemetry
-into the clair-core Evaluation bounded context without coupling to
-internal Core details.
+Defines the contract that the edge service uses to publish integration
+events into clair-core bounded contexts without coupling to internal Core
+details or transport implementation.
 """
 
 from abc import ABC, abstractmethod
 
 
 class CoreContextFacade(ABC):
-    """Anti-corruption layer facade for the clair-core evaluation endpoint."""
+    """Anti-corruption layer facade for Kafka-based core integration."""
 
     @abstractmethod
-    def forward_telemetry(self, api_key: str, payload: dict) -> bool:
-        """Forward a telemetry payload to clair-core for evaluation.
+    def publish_telemetry_recorded(self, payload: dict) -> bool:
+        """Publish a TelemetryRecorded integration event to clair-core.
 
         Args:
-            api_key: The device API key to authenticate the request.
             payload: The telemetry payload dict matching the Core contract.
 
         Returns:
-            True if the Core acknowledged the telemetry (2xx), False otherwise.
+            True if Kafka accepted the record, False otherwise.
         """
         ...
 
     @abstractmethod
-    def fetch_pending_device_commands(self, limit: int) -> list[dict]:
-        """Fetch pending commands from clair-core for edge delivery."""
-        ...
+    def publish_command_acknowledged(self, payload: dict) -> bool:
+        """Publish a CommandAcknowledged integration event to clair-core.
 
-    @abstractmethod
-    def acknowledge_device_command(
-        self,
-        device_id: str,
-        command_id: str,
-        status: str,
-        failure_reason: str | None = None,
-    ) -> bool:
-        """Acknowledge command execution back to clair-core."""
-        ...
+        Args:
+            payload: Dict with device_id, command_id, status, failure_reason.
 
-    @abstractmethod
-    def publish_device_presence_changed(self, payload: dict) -> bool:
-        """Publish a device presence transition detected by the edge."""
+        Returns:
+            True if Kafka accepted the record, False otherwise.
+        """
         ...

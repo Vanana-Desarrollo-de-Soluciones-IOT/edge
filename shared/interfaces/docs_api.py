@@ -17,8 +17,7 @@ OPENAPI_SPEC = {
     "servers": [{"url": get_edge_public_base_url(), "description": "Edge service"}],
     "tags": [
         {"name": "Telemetry", "description": "Environmental telemetry ingestion from IoT sensors."},
-        {"name": "Provisioning", "description": "Device cache synchronization from clair-core."},
-        {"name": "Commands", "description": "Core-to-edge command synchronization and embedded device delivery."},
+        {"name": "Commands", "description": "Embedded device command delivery. Commands arrive via Kafka from clair-core."},
     ],
     "components": {
         "securitySchemes": {
@@ -28,17 +27,11 @@ OPENAPI_SPEC = {
                 "name": "X-Hardware-Id",
                 "description": "Physical hardware identifier of the device.",
             },
-            "DeviceSecret": {
+            "DeviceApiKey": {
                 "type": "apiKey",
                 "in": "header",
-                "name": "X-Device-Secret",
-                "description": "Device secret key for physical device -> edge authentication.",
-            },
-            "EdgeToken": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-Edge-Token",
-                "description": "Shared edge token used to protect provisioning endpoints.",
+                "name": "X-API-Key",
+                "description": "Device API key for physical device -> edge authentication.",
             },
         },
         "schemas": {
@@ -131,12 +124,11 @@ OPENAPI_SPEC = {
             },
             "DeviceCacheRecord": {
                 "type": "object",
-                "required": ["device_id", "hardware_id", "api_key", "device_secret", "status"],
+                "required": ["device_id", "hardware_id", "api_key", "status"],
                 "properties": {
                     "device_id": {"type": "string"},
                     "hardware_id": {"type": "string"},
                     "api_key": {"type": "string"},
-                    "device_secret": {"type": "string"},
                     "status": {"type": "string", "enum": ["OFFLINE", "ONLINE", "STANDBY", "ERROR", "MAINTENANCE", "DECOMMISSIONED"]},
                 },
             },
@@ -192,7 +184,7 @@ OPENAPI_SPEC = {
                 "tags": ["Telemetry"],
                 "summary": "Create environmental telemetry record",
                 "description": "Authenticates the device locally using the SQLite cache, validates sensor readings (CO2, PM, temperature, humidity), and stores the optimized telemetry record with connectivity status.",
-                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
                 "requestBody": {
                     "required": True,
                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTelemetryRequest"}}},
@@ -209,7 +201,6 @@ OPENAPI_SPEC = {
                 "tags": ["Telemetry"],
                 "summary": "Get device connection status",
                 "description": "Determines if a device is ONLINE or OFFLINE based on the time elapsed since its last telemetry was received. A device is considered OFFLINE if it hasn't sent telemetry in the last 30 seconds.",
-                "security": [{"EdgeToken": []}],
                 "parameters": [
                     {"name": "hardware_id", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Physical hardware identifier of the device."}
                 ],
@@ -221,42 +212,12 @@ OPENAPI_SPEC = {
                 },
             }
         },
-        "/api/v1/provisioning/devices/events": {
-            "post": {
-                "tags": ["Provisioning"],
-                "summary": "Receive clair-core device change event",
-                "description": "Upserts a device from clair-core into the local edge SQLite cache.",
-                "security": [{"EdgeToken": []}],
-                "requestBody": {
-                    "required": True,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceChangedEvent"}}},
-                },
-                "responses": {
-                    "200": {"description": "Local device cache updated."},
-                    "400": {"description": "Missing fields or invalid payload.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                },
-            }
-        },
-        "/api/v1/device/commands/sync": {
-            "post": {
-                "tags": ["Commands"],
-                "summary": "Synchronize pending commands from clair-core",
-                "description": "Fetches commands from clair-core, caches them locally, and makes them available for embedded devices.",
-                "security": [{"EdgeToken": []}],
-                "responses": {
-                    "200": {"description": "Commands synchronized."},
-                    "400": {"description": "Invalid request or core response.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                },
-            }
-        },
         "/api/v1/device/commands/pending": {
             "get": {
                 "tags": ["Commands"],
                 "summary": "Get pending commands for embedded device",
                 "description": "Authenticates the embedded device and returns locally cached commands, marking them as delivered.",
-                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
                 "responses": {
                     "200": {"description": "Pending commands returned."},
                     "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
@@ -267,8 +228,8 @@ OPENAPI_SPEC = {
             "post": {
                 "tags": ["Commands"],
                 "summary": "Acknowledge embedded command execution",
-                "description": "Persists the embedded ACK locally and forwards it to clair-core.",
-                "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
+                "description": "Persists the embedded ACK locally and publishes it to Kafka for clair-core.",
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
                 "parameters": [{"name": "commandId", "in": "path", "required": True, "schema": {"type": "string"}}],
                 "requestBody": {
                     "required": True,

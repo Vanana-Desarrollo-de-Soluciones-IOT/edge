@@ -1,7 +1,7 @@
 """Edge Service — Flask application entry point.
 
 Registers bounded-context blueprints, initializes the SQLite database,
-and synchronizes devices from clair-core on first request.
+starts Kafka topic bootstrapping, and launches background consumers.
 """
 
 from flask import Flask, request
@@ -11,33 +11,44 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from device.application.command_sync_processor import CommandSyncProcessor
+from device.application.kafka_command_consumer import KafkaCommandConsumer
 from device.application.outbox_processor import TelemetryOutboxProcessor
+from device.infrastructure.kafka.device_kafka_topics import DeviceKafkaTopics
 from device.interfaces.api import device_api
 from iam.application.device_presence_monitor import DevicePresenceMonitor
+from iam.infrastructure.kafka.iam_kafka_topics import IamKafkaTopics
 from iam.interfaces.services import iam_api
-from provisioning.application.services.device_provisioning_application_service import DeviceProvisioningApplicationService
-from provisioning.interfaces.api import provisioning_api
-from shared.interfaces.docs_api import docs_api
+from provisioning.application.kafka_provisioning_consumer import KafkaProvisioningConsumer
+from provisioning.infrastructure.kafka.provisioning_kafka_topics import ProvisioningKafkaTopics
 from shared.infrastructure.database import init_db
 from shared.infrastructure.environment import (
     get_edge_cors_allowed_headers,
     get_edge_cors_allowed_origins,
-    should_sync_devices_on_startup,
 )
+from shared.infrastructure.kafka_client import KafkaInfrastructureClient
+from shared.interfaces.docs_api import docs_api
 
 app = Flask(__name__)
 app.register_blueprint(iam_api)
 app.register_blueprint(device_api)
-app.register_blueprint(provisioning_api)
 app.register_blueprint(docs_api)
 
 logger = logging.getLogger(__name__)
 
 _initialized = False
 _outbox_processor = TelemetryOutboxProcessor()
-_command_sync_processor = CommandSyncProcessor()
+_command_consumer = KafkaCommandConsumer()
 _device_presence_monitor = DevicePresenceMonitor()
+_provisioning_consumer = KafkaProvisioningConsumer()
+
+
+def _collect_all_topics() -> list:
+    """Gather topic definitions from every bounded context."""
+    return (
+        DeviceKafkaTopics.all()
+        + IamKafkaTopics.all()
+        + ProvisioningKafkaTopics.all()
+    )
 
 
 @app.after_request
@@ -60,18 +71,22 @@ def add_cors_headers(response):
 
 @app.before_request
 def initialize():
-    """Initialize database, start outbox processor, and sync clair-core devices on first request."""
+    """Initialize database, bootstrap Kafka topics, and start background workers."""
     global _initialized
     if not _initialized:
         init_db()
+
+        # Bootstrap Kafka topics from each bounded context's own registry
+        try:
+            kafka_client = KafkaInfrastructureClient()
+            kafka_client.bootstrap_topics(_collect_all_topics())
+        except Exception as exc:
+            logger.warning("Kafka topic bootstrap failed: %s", exc)
+
         _outbox_processor.start()
-        _command_sync_processor.start()
+        _command_consumer.start()
+        _provisioning_consumer.start()
         _device_presence_monitor.start()
-        if should_sync_devices_on_startup():
-            try:
-                DeviceProvisioningApplicationService().sync_devices_from_core()
-            except RuntimeError as exc:
-                logger.warning("Device startup sync skipped: %s", exc)
         _initialized = True
 
 

@@ -18,12 +18,12 @@ class DeviceRepository:
     Peewee ORM models (infrastructure) and Device domain entities.
     """
 
-    def find_by_hardware_id_and_device_secret(self, hardware_id, device_secret):
-        """Find a device by its hardware ID and device secret combination.
+    def find_by_hardware_id_and_api_key(self, hardware_id, api_key):
+        """Find a device by its hardware ID and api key combination.
 
         Args:
             hardware_id: The physical hardware identifier.
-            device_secret: The secret key provided by the physical embedded device.
+            api_key: The secret key provided by the physical embedded device.
 
         Returns:
             A Device domain entity if found, None otherwise.
@@ -31,13 +31,12 @@ class DeviceRepository:
         try:
             model = DeviceModel.get(
                 (DeviceModel.hardware_id == hardware_id) &
-                (DeviceModel.device_secret == device_secret)
+                (DeviceModel.api_key == api_key)
             )
             return Device(
                 device_id=model.device_id,
                 hardware_id=model.hardware_id,
                 api_key=model.api_key,
-                device_secret=model.device_secret,
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,
@@ -100,7 +99,6 @@ class DeviceRepository:
                 device_id=model.device_id,
                 hardware_id=model.hardware_id,
                 api_key=model.api_key,
-                device_secret=model.device_secret,
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,
@@ -116,7 +114,6 @@ class DeviceRepository:
                 device_id=model.device_id,
                 hardware_id=model.hardware_id,
                 api_key=model.api_key,
-                device_secret=model.device_secret,
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,

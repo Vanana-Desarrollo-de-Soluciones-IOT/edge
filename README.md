@@ -1,6 +1,6 @@
 # Edge Service — IoT Telemetry Ingestion
 
-Servicio edge para la ingesta de telemetría ambiental (CO2 y PM2.5) desde dispositivos IoT. Valida el estado del dispositivo localmente (cache) y delega la validacion de credenciales a clair-core.
+Servicio edge para la ingesta de telemetría ambiental (CO2 y PM2.5) desde dispositivos IoT. Valida el estado del dispositivo localmente (cache) y sincroniza telemetría, comandos y presencia con clair-core via Kafka.
 
 ## Stack Tecnológico
 
@@ -42,10 +42,10 @@ edge-service/
 │   └── interfaces/
 │       └── api.py                 # Blueprint device_api + POST /api/v1/device/telemetry
 ├── provisioning/                  # Bounded Context: Device Provisioning
-│   ├── application/               # Startup sync + ACL HTTP contra clair-core
+│   ├── application/               # Kafka consumer + ACL contra clair-core
 │   ├── domain/                    # Commands, queries y validación de cache
 │   ├── infrastructure/            # Upsert del cache local de devices
-│   └── interfaces/                # Webhook receiver de cambios de devices
+│   └── interfaces/                # Recursos para consumo Kafka
 └── shared/                        # Infraestructura compartida
     └── infrastructure/
         └── database.py            # SqliteDatabase(EDGE_DATABASE_PATH || 'clair_edge.db') + init_db()
@@ -88,7 +88,7 @@ Crea un nuevo registro de telemetría ambiental para un dispositivo autenticado.
 ```
 Content-Type: application/json
 X-Hardware-Id: <hardware-id-del-dispositivo>
-X-Device-Secret: <device-secret-del-dispositivo>
+X-API-Key: <api-key-del-dispositivo>
 ```
 
 **Body (JSON):**
@@ -121,7 +121,7 @@ X-Device-Secret: <device-secret-del-dispositivo>
 curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
   -H 'Content-Type: application/json' \
   -H 'X-Hardware-Id: CLAIR-0001' \
-  -H 'X-Device-Secret: <device-secret>' \
+  -H 'X-API-Key: <api-key>' \
   -d '{
     "co2": 420.5,
     "pm25": 35.2,
@@ -131,18 +131,16 @@ curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
 
 ## Sincronizacion de Devices
 
-El edge no crea devices de prueba. Al iniciar, descarga los devices maestros desde `clair-core` y los cachea en SQLite para validar telemetria localmente.
+El edge no crea devices de prueba. Recibe los devices maestros desde `clair-core` via Kafka (`clair.provisioning.devices.changed`) y los cachea en SQLite para validar telemetria localmente.
 
-La sincronizacion es automatica al iniciar y via webhooks desde `clair-core`.
+La sincronizacion es reactiva via Kafka: el core publica cambios y el edge los consume en tiempo real.
 
 Variables relevantes:
 
 | Variable | Default | Descripción |
 |---|---|---|
 | `EDGE_DATABASE_PATH` | `clair_edge.db` | Ruta del SQLite local del edge |
-| `EDGE_SYNC_DEVICES_ON_STARTUP` | `true` | Ejecuta sincronizacion inicial al arrancar |
-| `CLAIR_CORE_DEVICES_URL` | *(required)* | Endpoint de provisioning de `clair-core` |
-| `EDGE_TO_CORE_TOKEN` | *(required)* | Token compartido para autenticar la sincronizacion edge -> clair-core |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Broker Kafka para comunicacion edge <-> core |
 | `EDGE_PUBLIC_BASE_URL` | `http://127.0.0.1:5000` | Base URL para el OpenAPI `servers` (docs) |
 
 Este proyecto soporta archivo `.env` (cargado al iniciar via `python-dotenv`). Usa `.env.example` como base.

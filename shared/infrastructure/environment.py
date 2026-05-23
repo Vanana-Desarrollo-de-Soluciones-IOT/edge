@@ -1,19 +1,12 @@
 """Shared environment configuration.
 
-Even when communicating over HTTP, we keep an ACL module to isolate integration
-details (URLs, headers, timeouts, error translation) from domain/application logic.
+All integration with clair-core is now via Kafka.  Environment helpers
+are stateless and context-agnostic.
 """
 
 from __future__ import annotations
 
 import os
-
-
-def _require(name: str) -> str:
-    value = os.getenv(name, "").strip()
-    if not value:
-        raise RuntimeError(f"{name} must be configured")
-    return value
 
 
 def _optional(name: str, default: str) -> str:
@@ -23,53 +16,6 @@ def _optional(name: str, default: str) -> str:
 
 def get_edge_database_path() -> str:
     return os.getenv("EDGE_DATABASE_PATH", "clair_edge.db").strip() or "clair_edge.db"
-
-
-def should_sync_devices_on_startup() -> bool:
-    return os.getenv("EDGE_SYNC_DEVICES_ON_STARTUP", "true").lower() == "true"
-
-
-def get_clair_core_base_url() -> str:
-    return _require("CLAIR_CORE_BASE_URL").rstrip("/")
-
-
-def get_clair_core_devices_url() -> str:
-    return _optional(
-        "CLAIR_CORE_DEVICES_URL",
-        f"{get_clair_core_base_url()}/api/v1/devices/provisioning",
-    )
-
-
-def get_clair_core_evaluations_url() -> str:
-    return _optional(
-        "CLAIR_CORE_EVALUATIONS_URL",
-        f"{get_clair_core_base_url()}/api/v1/evaluations/telemetry",
-    )
-
-
-def get_clair_core_device_commands_pending_url() -> str:
-    return _optional(
-        "CLAIR_CORE_DEVICE_COMMANDS_PENDING_URL",
-        f"{get_clair_core_base_url()}/api/v1/devices/commands/pending",
-    )
-
-
-def get_clair_core_device_command_ack_url(device_id: str, command_id: str) -> str:
-    template = os.getenv("CLAIR_CORE_DEVICE_COMMAND_ACK_URL_TEMPLATE", "").strip()
-    if template:
-        return template.format(device_id=device_id, command_id=command_id)
-    return f"{get_clair_core_base_url()}/api/v1/devices/{device_id}/commands/{command_id}/ack"
-
-
-def get_clair_core_device_presence_events_url() -> str:
-    return _optional(
-        "CLAIR_CORE_DEVICE_PRESENCE_EVENTS_URL",
-        f"{get_clair_core_base_url()}/api/v1/devices/presence/events",
-    )
-
-
-def get_edge_to_core_token() -> str:
-    return _require("EDGE_TO_CORE_TOKEN")
 
 
 def get_edge_public_base_url() -> str:
@@ -92,5 +38,16 @@ def get_edge_cors_allowed_origins() -> list[str]:
 def get_edge_cors_allowed_headers() -> str:
     return os.getenv(
         "EDGE_CORS_ALLOWED_HEADERS",
-        "Content-Type,X-Hardware-Id,X-Device-Secret,X-Edge-Token",
+        "Content-Type,X-Hardware-Id,X-API-Key",
     ).strip()
+
+
+def get_kafka_bootstrap_servers() -> list[str]:
+    """Return Kafka bootstrap servers as a list of host:port strings.
+
+    Defaults to localhost:9092 for development.
+    """
+    raw = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092").strip()
+    if not raw:
+        return ["localhost:9092"]
+    return [s.strip() for s in raw.split(",") if s.strip()]
