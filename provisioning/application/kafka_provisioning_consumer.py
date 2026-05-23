@@ -58,7 +58,8 @@ class KafkaProvisioningConsumer:
             bootstrap_servers=get_kafka_bootstrap_servers(),
             group_id=KafkaConsumerGroups.EDGE_PROVISIONING_CONSUMER,
             auto_offset_reset="earliest",
-            enable_auto_commit=True,
+            # Commit offsets only after the SQLite cache has been updated successfully.
+            enable_auto_commit=False,
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
             key_deserializer=lambda m: m.decode("utf-8") if m else None,
         )
@@ -69,6 +70,8 @@ class KafkaProvisioningConsumer:
                     break
                 try:
                     self._handle_message(message.value)
+                    # At-least-once delivery: commit only after successful processing.
+                    self._consumer.commit()
                 except Exception:
                     logger.exception("Failed to handle provisioning message")
         except Exception:
