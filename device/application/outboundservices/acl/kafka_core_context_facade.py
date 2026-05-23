@@ -10,8 +10,8 @@ import logging
 from device.application.outboundservices.acl.core_context_facade import (
     CoreContextFacade,
 )
+from device.infrastructure.kafka.device_kafka_topics import DeviceKafkaTopics
 from shared.infrastructure.kafka_client import KafkaInfrastructureClient
-from shared.infrastructure.kafka_topics import ClairKafkaTopics
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class KafkaCoreContextFacadeImpl(CoreContextFacade):
         try:
             hardware_id = payload.get("hardware_id", "unknown")
             self._producer.send(
-                ClairKafkaTopics.DEVICE_TELEMETRY_RECORDED.name,
+                DeviceKafkaTopics.TELEMETRY_RECORDED.name,
                 key=hardware_id,
                 value=payload,
             )
@@ -42,7 +42,7 @@ class KafkaCoreContextFacadeImpl(CoreContextFacade):
         try:
             command_id = payload.get("command_id", "unknown")
             self._producer.send(
-                ClairKafkaTopics.DEVICE_COMMANDS_ACKNOWLEDGED.name,
+                DeviceKafkaTopics.COMMANDS_ACKNOWLEDGED.name,
                 key=command_id,
                 value=payload,
             )

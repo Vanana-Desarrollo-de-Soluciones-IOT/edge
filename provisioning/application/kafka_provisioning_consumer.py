@@ -13,8 +13,9 @@ from typing import Optional
 from kafka import KafkaConsumer
 
 from provisioning.application.services.device_provisioning_application_service import DeviceProvisioningApplicationService
+from provisioning.infrastructure.kafka.provisioning_kafka_topics import ProvisioningKafkaTopics
 from shared.infrastructure.environment import get_kafka_bootstrap_servers
-from shared.infrastructure.kafka_topics import ClairKafkaTopics, KafkaConsumerGroups
+from shared.infrastructure.kafka_topics import KafkaConsumerGroups
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class KafkaProvisioningConsumer:
     def _run(self) -> None:
         """Main loop: subscribe and consume provisioning messages."""
         self._consumer = KafkaConsumer(
-            ClairKafkaTopics.PROVISIONING_DEVICES_CHANGED.name,
+            ProvisioningKafkaTopics.DEVICES_CHANGED.name,
             bootstrap_servers=get_kafka_bootstrap_servers(),
             group_id=KafkaConsumerGroups.EDGE_PROVISIONING_CONSUMER,
             auto_offset_reset="earliest",

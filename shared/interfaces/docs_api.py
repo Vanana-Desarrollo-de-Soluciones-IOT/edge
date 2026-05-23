@@ -33,12 +33,6 @@ OPENAPI_SPEC = {
                 "name": "X-Device-Secret",
                 "description": "Device secret key for physical device -> edge authentication.",
             },
-            "EdgeToken": {
-                "type": "apiKey",
-                "in": "header",
-                "name": "X-Edge-Token",
-                "description": "Shared edge token used to protect provisioning endpoints.",
-            },
         },
         "schemas": {
             "CreateTelemetryRequest": {
@@ -208,7 +202,6 @@ OPENAPI_SPEC = {
                 "tags": ["Telemetry"],
                 "summary": "Get device connection status",
                 "description": "Determines if a device is ONLINE or OFFLINE based on the time elapsed since its last telemetry was received. A device is considered OFFLINE if it hasn't sent telemetry in the last 30 seconds.",
-                "security": [{"EdgeToken": []}],
                 "parameters": [
                     {"name": "hardware_id", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Physical hardware identifier of the device."}
                 ],

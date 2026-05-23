@@ -14,7 +14,7 @@ from kafka.admin import NewTopic
 from kafka.errors import KafkaError, TopicAlreadyExistsError
 
 from shared.infrastructure.environment import get_kafka_bootstrap_servers
-from shared.infrastructure.kafka_topics import ClairKafkaTopics, KafkaTopicConfig
+from shared.infrastructure.kafka_topics import KafkaTopicConfig
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +36,14 @@ class KafkaInfrastructureClient:
     # ------------------------------------------------------------------
     # Topic administration (schema-as-code)
     # ------------------------------------------------------------------
-    def bootstrap_topics(self) -> None:
-        """Ensure every topic defined in ClairKafkaTopics exists in the cluster.
+    def bootstrap_topics(self, topics: list[KafkaTopicConfig]) -> None:
+        """Ensure the given topics exist in the Kafka cluster.
 
         Non-destructive: already-existing topics are silently skipped.
+
+        Args:
+            topics: Topic configurations to reconcile, usually collected
+                from every bounded context at application startup.
         """
         admin = KafkaAdminClient(
             bootstrap_servers=self._bootstrap_servers,
@@ -48,7 +52,7 @@ class KafkaInfrastructureClient:
         try:
             existing = set(admin.list_topics())
             to_create: list[NewTopic] = []
-            for cfg in ClairKafkaTopics.all():
+            for cfg in topics:
                 if cfg.name not in existing:
                     to_create.append(
                         NewTopic(

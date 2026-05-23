@@ -19,7 +19,6 @@ from device.interfaces.resources import (
     device_command_to_dict,
 )
 from iam.interfaces.services import authenticate_request
-from shared.infrastructure.environment import get_edge_to_core_token
 
 device_api = Blueprint("device_api", __name__)
 
@@ -215,9 +214,6 @@ def get_device_connection_status(hardware_id):
     since its last telemetry was received. A device is considered OFFLINE
     if it hasn't sent telemetry in the last 30 seconds.
 
-    Headers:
-        X-Edge-Token: shared edge/core token for authentication.
-
     Args:
         hardware_id: Physical hardware identifier of the device.
 
@@ -229,12 +225,8 @@ def get_device_connection_status(hardware_id):
                 "last_seen_at": "2024-01-15T10:30:00Z",
                 "seconds_since_last_seen": 15
             }
-        401: Missing or invalid edge token.
         404: Device not found.
     """
-    if request.headers.get("X-Edge-Token") != get_edge_to_core_token():
-        return jsonify({"error": "Invalid or missing X-Edge-Token"}), 401
-
     try:
         query = GetDeviceConnectionStatusQuery(hardware_id=hardware_id)
         status = connection_status_query_handler.handle(query)

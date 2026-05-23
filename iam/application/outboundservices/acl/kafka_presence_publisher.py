@@ -6,8 +6,8 @@ keeping domain and application layers decoupled from messaging infrastructure.
 
 import logging
 
+from iam.infrastructure.kafka.iam_kafka_topics import IamKafkaTopics
 from shared.infrastructure.kafka_client import KafkaInfrastructureClient
-from shared.infrastructure.kafka_topics import ClairKafkaTopics
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class KafkaPresencePublisher:
         try:
             hardware_id = payload.get("hardware_id", "unknown")
             self._producer.send(
-                ClairKafkaTopics.DEVICE_PRESENCE_CHANGED.name,
+                IamKafkaTopics.DEVICE_PRESENCE_CHANGED.name,
                 key=hardware_id,
                 value=payload,
             )

@@ -13,9 +13,9 @@ from typing import Optional
 from kafka import KafkaConsumer
 
 from device.application.services import DeviceCommandApplicationService
+from device.infrastructure.kafka.device_kafka_topics import DeviceKafkaTopics
 from shared.infrastructure.environment import get_kafka_bootstrap_servers
-from shared.infrastructure.kafka_client import KafkaInfrastructureClient
-from shared.infrastructure.kafka_topics import ClairKafkaTopics, KafkaConsumerGroups
+from shared.infrastructure.kafka_topics import KafkaConsumerGroups
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class KafkaCommandConsumer:
     def _run(self) -> None:
         """Main loop: subscribe and consume messages."""
         self._consumer = KafkaConsumer(
-            ClairKafkaTopics.DEVICE_COMMANDS_PENDING.name,
+            DeviceKafkaTopics.COMMANDS_PENDING.name,
             bootstrap_servers=get_kafka_bootstrap_servers(),
             group_id=KafkaConsumerGroups.EDGE_COMMAND_CONSUMER,
             auto_offset_reset="earliest",

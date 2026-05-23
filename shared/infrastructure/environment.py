@@ -38,7 +38,7 @@ def get_edge_cors_allowed_origins() -> list[str]:
 def get_edge_cors_allowed_headers() -> str:
     return os.getenv(
         "EDGE_CORS_ALLOWED_HEADERS",
-        "Content-Type,X-Hardware-Id,X-Device-Secret,X-Edge-Token",
+        "Content-Type,X-Hardware-Id,X-Device-Secret",
     ).strip()
 
 

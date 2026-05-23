@@ -13,10 +13,13 @@ load_dotenv()
 
 from device.application.kafka_command_consumer import KafkaCommandConsumer
 from device.application.outbox_processor import TelemetryOutboxProcessor
+from device.infrastructure.kafka.device_kafka_topics import DeviceKafkaTopics
 from device.interfaces.api import device_api
 from iam.application.device_presence_monitor import DevicePresenceMonitor
+from iam.infrastructure.kafka.iam_kafka_topics import IamKafkaTopics
 from iam.interfaces.services import iam_api
 from provisioning.application.kafka_provisioning_consumer import KafkaProvisioningConsumer
+from provisioning.infrastructure.kafka.provisioning_kafka_topics import ProvisioningKafkaTopics
 from shared.infrastructure.database import init_db
 from shared.infrastructure.environment import (
     get_edge_cors_allowed_headers,
@@ -37,6 +40,15 @@ _outbox_processor = TelemetryOutboxProcessor()
 _command_consumer = KafkaCommandConsumer()
 _device_presence_monitor = DevicePresenceMonitor()
 _provisioning_consumer = KafkaProvisioningConsumer()
+
+
+def _collect_all_topics() -> list:
+    """Gather topic definitions from every bounded context."""
+    return (
+        DeviceKafkaTopics.all()
+        + IamKafkaTopics.all()
+        + ProvisioningKafkaTopics.all()
+    )
 
 
 @app.after_request
@@ -64,10 +76,10 @@ def initialize():
     if not _initialized:
         init_db()
 
-        # Bootstrap Kafka topics from Python definitions (ORM-style)
+        # Bootstrap Kafka topics from each bounded context's own registry
         try:
             kafka_client = KafkaInfrastructureClient()
-            kafka_client.bootstrap_topics()
+            kafka_client.bootstrap_topics(_collect_all_topics())
         except Exception as exc:
             logger.warning("Kafka topic bootstrap failed: %s", exc)
 
