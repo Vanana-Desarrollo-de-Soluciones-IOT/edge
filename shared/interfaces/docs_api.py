@@ -17,8 +17,7 @@ OPENAPI_SPEC = {
     "servers": [{"url": get_edge_public_base_url(), "description": "Edge service"}],
     "tags": [
         {"name": "Telemetry", "description": "Environmental telemetry ingestion from IoT sensors."},
-        {"name": "Provisioning", "description": "Device cache synchronization from clair-core."},
-        {"name": "Commands", "description": "Core-to-edge command synchronization and embedded device delivery."},
+        {"name": "Commands", "description": "Embedded device command delivery. Commands arrive via Kafka from clair-core."},
     ],
     "components": {
         "securitySchemes": {
@@ -221,36 +220,6 @@ OPENAPI_SPEC = {
                 },
             }
         },
-        "/api/v1/provisioning/devices/events": {
-            "post": {
-                "tags": ["Provisioning"],
-                "summary": "Receive clair-core device change event",
-                "description": "Upserts a device from clair-core into the local edge SQLite cache.",
-                "security": [{"EdgeToken": []}],
-                "requestBody": {
-                    "required": True,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceChangedEvent"}}},
-                },
-                "responses": {
-                    "200": {"description": "Local device cache updated."},
-                    "400": {"description": "Missing fields or invalid payload.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                },
-            }
-        },
-        "/api/v1/device/commands/sync": {
-            "post": {
-                "tags": ["Commands"],
-                "summary": "Synchronize pending commands from clair-core",
-                "description": "Fetches commands from clair-core, caches them locally, and makes them available for embedded devices.",
-                "security": [{"EdgeToken": []}],
-                "responses": {
-                    "200": {"description": "Commands synchronized."},
-                    "400": {"description": "Invalid request or core response.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                    "401": {"description": "Missing or invalid edge token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                },
-            }
-        },
         "/api/v1/device/commands/pending": {
             "get": {
                 "tags": ["Commands"],
@@ -267,7 +236,7 @@ OPENAPI_SPEC = {
             "post": {
                 "tags": ["Commands"],
                 "summary": "Acknowledge embedded command execution",
-                "description": "Persists the embedded ACK locally and forwards it to clair-core.",
+                "description": "Persists the embedded ACK locally and publishes it to Kafka for clair-core.",
                 "security": [{"DeviceCredentials": [], "DeviceSecret": []}],
                 "parameters": [{"name": "commandId", "in": "path", "required": True, "schema": {"type": "string"}}],
                 "requestBody": {

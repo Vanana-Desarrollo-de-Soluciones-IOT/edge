@@ -1,0 +1,57 @@
+"""KafkaCoreContextFacadeImpl — Kafka implementation of the Core ACL facade.
+
+Publishes integration events to clair-core topics using a shared
+KafkaProducer.  Keeps the device bounded context decoupled from Kafka
+internals.
+"""
+
+import logging
+
+from device.application.outboundservices.acl.core_context_facade import (
+    CoreContextFacade,
+)
+from shared.infrastructure.kafka_client import KafkaInfrastructureClient
+from shared.infrastructure.kafka_topics import ClairKafkaTopics
+
+logger = logging.getLogger(__name__)
+
+
+class KafkaCoreContextFacadeImpl(CoreContextFacade):
+    """Kafka-based ACL implementation that posts integration events to clair-core."""
+
+    def __init__(self, kafka_client: KafkaInfrastructureClient | None = None) -> None:
+        self._kafka_client = kafka_client or KafkaInfrastructureClient()
+        self._producer = self._kafka_client.create_producer()
+
+    def publish_telemetry_recorded(self, payload: dict) -> bool:
+        """Publish telemetry to Kafka topic clair.device.telemetry.recorded."""
+        try:
+            hardware_id = payload.get("hardware_id", "unknown")
+            self._producer.send(
+                ClairKafkaTopics.DEVICE_TELEMETRY_RECORDED.name,
+                key=hardware_id,
+                value=payload,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("Failed to publish telemetry to Kafka: %s", exc)
+            return False
+
+    def publish_command_acknowledged(self, payload: dict) -> bool:
+        """Publish command ACK to Kafka topic clair.device.commands.acknowledged."""
+        try:
+            command_id = payload.get("command_id", "unknown")
+            self._producer.send(
+                ClairKafkaTopics.DEVICE_COMMANDS_ACKNOWLEDGED.name,
+                key=command_id,
+                value=payload,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("Failed to publish command ACK to Kafka: %s", exc)
+            return False
+
+    def close(self) -> None:
+        """Flush and close the underlying producer."""
+        if self._producer:
+            self._producer.flush()

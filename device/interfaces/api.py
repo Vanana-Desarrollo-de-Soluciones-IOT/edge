@@ -11,7 +11,6 @@ from device.application.services import DeviceCommandApplicationService, DeviceT
 from device.domain.commands import (
     AcknowledgeEmbeddedDeviceCommandCommand,
     CreateFullTelemetryRecordCommand,
-    SynchronizeDeviceCommandsCommand,
 )
 from device.domain.queries import GetDeviceConnectionStatusQuery
 from device.interfaces.resources import (
@@ -145,39 +144,6 @@ def create_telemetry_record():
         return jsonify({"error": f"Invalid request format: {str(e)}"}), 400
 
 
-@device_api.route("/api/v1/device/commands/sync", methods=["POST"])
-def synchronize_device_commands():
-    """Synchronize pending device commands from clair-core into the edge cache.
-
-    Headers:
-        X-Edge-Token: shared edge/core token.
-
-    Query Parameters:
-        limit: optional max number of commands to fetch, defaults to 100.
-
-    Returns:
-        200: Commands synchronized and cached locally.
-        401: Missing or invalid edge token.
-        400: Invalid limit or core response shape.
-    """
-    if request.headers.get("X-Edge-Token") != get_edge_to_core_token():
-        return jsonify({"error": "Invalid or missing X-Edge-Token"}), 401
-
-    try:
-        limit = int(request.args.get("limit", 100))
-        commands = command_service.synchronize_pending_commands(
-            SynchronizeDeviceCommandsCommand(limit=limit)
-        )
-        return jsonify({
-            "count": len(commands),
-            "commands": [device_command_to_dict(command) for command in commands],
-        }), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": f"Unable to synchronize commands: {str(e)}"}), 400
-
-
 @device_api.route("/api/v1/device/commands/pending", methods=["GET"])
 def get_pending_device_commands_for_embedded():
     """Return commands pending for the authenticated embedded device.
@@ -215,7 +181,7 @@ def acknowledge_embedded_device_command(command_id):
         {"status": "FAILED", "failureReason": "Embedded timeout"}
 
     Returns:
-        200: ACK persisted locally and forwarded to clair-core when reachable.
+        200: ACK persisted locally and published to Kafka for clair-core.
         400: Invalid body or unknown command.
         401: Missing or invalid device credentials.
     """

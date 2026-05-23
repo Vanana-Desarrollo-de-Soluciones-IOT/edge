@@ -1,28 +1,44 @@
-"""Application service for provisioning the local device cache."""
+"""Application service for provisioning the local device cache via Kafka.
 
-from provisioning.application.outboundservices.acl.clair_core_device_service import ClairCoreDeviceService
-from provisioning.domain.commands.synchronize_devices_command import SynchronizeDevicesCommand
+Coordinates device cache updates driven entirely by Kafka events from
+clair-core.  No HTTP communication remains in this bounded context.
+"""
+
 from provisioning.domain.services.device_cache_service import DeviceCacheService
 from provisioning.infrastructure.device_cache_repository import DeviceCacheRepository
-from shared.infrastructure.environment import get_clair_core_devices_url
 
 
 class DeviceProvisioningApplicationService:
-    """Coordinates initial and webhook-driven device cache synchronization."""
+    """Coordinates Kafka-driven device cache synchronization.
+
+    Receives DeviceChanged integration events and upserts validated device
+    records into the local SQLite cache.
+    """
 
     def __init__(self):
-        self.core_device_service = ClairCoreDeviceService()
         self.device_cache_repository = DeviceCacheRepository()
         self.device_cache_service = DeviceCacheService()
 
-    def sync_devices_from_core(self):
-        """Download master devices from clair-core and cache them locally."""
-        source_url = get_clair_core_devices_url()
-        devices = self.core_device_service.fetch_devices(source_url)
-        return self.synchronize_devices(SynchronizeDevicesCommand(devices))
+    def handle_device_changed_event(self, payload: dict) -> int:
+        """Process a single DeviceChanged integration event from Kafka.
 
-    def synchronize_devices(self, command):
-        """Upsert validated device records into the local SQLite cache."""
-        for device in command.devices:
-            self.device_cache_service.validate_device_record(device)
-        return self.device_cache_repository.upsert_many(command.devices)
+        Args:
+            payload: Dict with device_id, hardware_id, api_key, device_secret, status.
+
+        Returns:
+            Number of records updated (0 or 1).
+        """
+        record = self._normalize_payload(payload)
+        self.device_cache_service.validate_device_record(record)
+        return self.device_cache_repository.upsert_many([record])
+
+    @staticmethod
+    def _normalize_payload(payload: dict) -> dict:
+        """Normalize Kafka payload keys to the local cache schema."""
+        return {
+            "device_id": str(payload.get("device_id") or payload.get("id")),
+            "hardware_id": payload.get("hardware_id") or payload.get("hardwareId"),
+            "api_key": payload.get("api_key") or payload.get("apiKey") or "",
+            "device_secret": payload.get("device_secret") or payload.get("deviceSecret") or "",
+            "status": payload.get("status"),
+        }

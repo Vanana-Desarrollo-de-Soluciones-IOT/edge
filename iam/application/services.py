@@ -7,7 +7,7 @@ with infrastructure repositories.
 import logging
 from datetime import datetime, timezone
 
-from device.application.outboundservices.acl.external_core_service import ExternalCoreService
+from iam.application.outboundservices.acl.kafka_presence_publisher import KafkaPresencePublisher
 from iam.domain.events import DevicePresenceChangedEvent
 from iam.domain.services import AuthService
 from iam.infrastructure.repositories import DeviceRepository
@@ -41,11 +41,11 @@ class AuthApplicationService:
 
 
 class DevicePresenceApplicationService:
-    """Application service for publishing edge-detected presence transitions."""
+    """Application service for publishing edge-detected presence transitions via Kafka."""
 
     def __init__(self):
         self.device_repository = DeviceRepository()
-        self.external_core_service = ExternalCoreService()
+        self.kafka_presence_publisher = KafkaPresencePublisher()
 
     def mark_seen(self, hardware_id: str) -> None:
         """Mark a device ONLINE from telemetry and publish the transition if needed."""
@@ -71,12 +71,12 @@ class DevicePresenceApplicationService:
             occurred_at=occurred_at,
         )
         payload = {
-            "deviceId": event.device_id,
-            "hardwareId": event.hardware_id,
+            "device_id": event.device_id,
+            "hardware_id": event.hardware_id,
             "status": event.status,
-            "occurredAt": event.occurred_at.isoformat(),
+            "occurred_at": event.occurred_at.isoformat(),
         }
-        if not self.external_core_service.publish_device_presence_changed(payload):
+        if not self.kafka_presence_publisher.publish_device_presence_changed(payload):
             logger.warning(
                 "Failed to publish %s presence event for hardware_id=%s",
                 event.status,
