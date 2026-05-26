@@ -17,6 +17,7 @@ from device.infrastructure.kafka.device_kafka_topics import DeviceKafkaTopics
 from device.interfaces.api import device_api
 from alerting.infrastructure.kafka.alerting_kafka_topics import AlertingKafkaTopics
 from alerting.interfaces.api import alerting_api
+from alerting.application.kafka_alert_incident_consumer import KafkaAlertIncidentConsumer
 from iam.application.device_presence_monitor import DevicePresenceMonitor
 from iam.infrastructure.kafka.iam_kafka_topics import IamKafkaTopics
 from iam.interfaces.services import iam_api
@@ -43,6 +44,7 @@ _outbox_processor = TelemetryOutboxProcessor()
 _command_consumer = KafkaCommandConsumer()
 _device_presence_monitor = DevicePresenceMonitor()
 _provisioning_consumer = KafkaProvisioningConsumer()
+_alert_incident_consumer = KafkaAlertIncidentConsumer()
 
 
 def _collect_all_topics() -> list:
@@ -91,6 +93,7 @@ def initialize():
         _command_consumer.start()
         _provisioning_consumer.start()
         _device_presence_monitor.start()
+        _alert_incident_consumer.start()
         _initialized = True
 
 

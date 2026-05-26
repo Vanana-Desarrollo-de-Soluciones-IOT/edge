@@ -173,15 +173,6 @@ OPENAPI_SPEC = {
                     "seconds_since_last_seen": {"type": "integer", "description": "Seconds elapsed since last telemetry (-1 if never seen)."},
                 },
             },
-            "AlertConditionStateChangedRequest": {
-                "type": "object",
-                "required": ["metric", "conditionState"],
-                "properties": {
-                    "metric": {"type": "string", "description": "Metric identifier (e.g., CO2, PM25, TEMPERATURE, HUMIDITY)."},
-                    "conditionState": {"type": "string", "enum": ["NORMAL", "CRITICAL"], "description": "Condition state computed by embedded."},
-                    "occurredAt": {"type": "string", "format": "date-time", "nullable": True, "description": "Optional timestamp when the transition occurred."},
-                },
-            },
             "ErrorResponse": {
                 "type": "object",
                 "properties": {"error": {"type": "string"}},
@@ -253,21 +244,31 @@ OPENAPI_SPEC = {
             }
         },
 
-        "/api/v1/device/alert-condition": {
+
+        "/api/v1/device/alerts/pending": {
+            "get": {
+                "tags": ["Alerting"],
+                "summary": "Get pending alert incident events",
+                "description": "Authenticates the embedded device and returns locally cached alert incident events received from clair-core, marking them as delivered.",
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
+                "responses": {
+                    "200": {"description": "Pending events returned."},
+                    "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+
+        "/api/v1/device/alerts/{eventId}/ack": {
             "post": {
                 "tags": ["Alerting"],
-                "summary": "Publish alert condition state change",
-                "description": "Authenticates the device locally and publishes a metric condition transition (NORMAL/CRITICAL) to Kafka for clair-core.",
+                "summary": "Acknowledge alert incident event",
+                "description": "Marks an alert incident event as acknowledged by embedded.",
                 "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
-                "requestBody": {
-                    "required": True,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AlertConditionStateChangedRequest"}}},
-                },
+                "parameters": [{"name": "eventId", "in": "path", "required": True, "schema": {"type": "integer"}}],
                 "responses": {
-                    "202": {"description": "Event accepted."},
-                    "400": {"description": "Missing fields or invalid values.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "200": {"description": "Event acknowledged."},
+                    "400": {"description": "Unknown event.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                     "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-                    "503": {"description": "Kafka unavailable/publish failed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                 },
             }
         },

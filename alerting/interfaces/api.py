@@ -2,72 +2,62 @@
 
 from flask import Blueprint, jsonify, request
 
-from alerting.application.services.alert_condition_state_application_service import (
-    AlertConditionStateApplicationService,
-)
-from alerting.domain.commands.record_alert_condition_state_changed_command import (
-    RecordAlertConditionStateChangedCommand,
-)
-from alerting.domain.valueobjects.alert_condition_state import AlertConditionState
-from alerting.interfaces.resources.alert_condition_state_changed_request import (
-    AlertConditionStateChangedRequest,
+from alerting.application.services.alert_incident_event_application_service import (
+    AlertIncidentEventApplicationService,
 )
 from iam.interfaces.services import authenticate_request
 
 alerting_api = Blueprint("alerting_api", __name__)
+alert_incident_event_service = AlertIncidentEventApplicationService()
 
-alert_condition_service = AlertConditionStateApplicationService()
 
+@alerting_api.route("/api/v1/device/alerts/pending", methods=["GET"])
+def get_pending_alert_incidents_for_embedded():
+    """Return alert incident events pending for the authenticated embedded device.
 
-@alerting_api.route("/api/v1/device/alert-condition", methods=["POST"])
-def record_alert_condition_state_changed():
-    """Record an embedded condition state change and publish it to Kafka.
+    The embedded device pulls these events to start/stop local UX
+    (LED/buzzer/screen) when an incident opens or closes.
 
     Headers:
-        Content-Type: application/json
-        X-Hardware-Id: <physical hardware identifier>
-        X-API-Key: <device secret key>
-
-    Body (JSON):
-        {
-            "metric": "CO2",
-            "conditionState": "CRITICAL",
-            "occurredAt": "2026-05-26T12:34:56Z"  # optional
-        }
+        X-Hardware-Id: physical hardware identifier.
+        X-API-Key: embedded device secret.
 
     Returns:
-        202: Event accepted for publishing.
-        400: Missing/invalid fields.
-        401: Authentication failure.
-        503: Kafka unavailable/publish failure.
+        200: Pending alert incident events, marked as delivered.
+        401: Missing or invalid device credentials.
     """
     auth_error = authenticate_request(update_last_seen=False)
     if auth_error is not None:
         return auth_error
 
+    hardware_id = request.headers.get("X-Hardware-Id")
     try:
-        data = request.get_json()
-        req = AlertConditionStateChangedRequest.from_dict(data)
+        events = alert_incident_event_service.get_pending_for_embedded(hardware_id)
+        return jsonify({"count": len(events), "events": events}), 200
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
-        hardware_id = request.headers.get("X-Hardware-Id")
-        if not hardware_id:
-            return jsonify({"error": "Missing X-Hardware-Id header"}), 401
 
-        device_id = hardware_id
+@alerting_api.route("/api/v1/device/alerts/<int:event_id>/ack", methods=["POST"])
+def acknowledge_alert_incident_event(event_id: int):
+    """Acknowledge that the embedded processed an alert incident event.
 
-        state = AlertConditionState(req.condition_state.upper())
-        command = RecordAlertConditionStateChangedCommand(
-            device_id=device_id,
-            hardware_id=hardware_id,
-            metric=req.metric.upper(),
-            condition_state=state,
-            occurred_at=req.occurred_at,
-        )
+    Headers:
+        X-Hardware-Id: physical hardware identifier.
+        X-API-Key: embedded device secret.
 
-        ok = alert_condition_service.record_condition_state_changed(command)
-        if not ok:
-            return jsonify({"error": "Kafka publish failed"}), 503
+    Returns:
+        200: ACK stored.
+        400: Unknown event.
+        401: Missing or invalid device credentials.
+    """
+    auth_error = authenticate_request(update_last_seen=False)
+    if auth_error is not None:
+        return auth_error
 
-        return jsonify({"status": "accepted"}), 202
+    hardware_id = request.headers.get("X-Hardware-Id")
+    try:
+        event = alert_incident_event_service.acknowledge_for_embedded(event_id, hardware_id)
+        return jsonify(event), 200
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400

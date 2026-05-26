@@ -1,5 +1,5 @@
-from alerting.application.services.alert_condition_state_application_service import (
-    AlertConditionStateApplicationService,
+from alerting.application.services.alert_incident_event_application_service import (
+    AlertIncidentEventApplicationService,
 )
 
-__all__ = ["AlertConditionStateApplicationService"]
+__all__ = ["AlertIncidentEventApplicationService"]
