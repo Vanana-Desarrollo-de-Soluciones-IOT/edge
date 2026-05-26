@@ -1,4 +1,4 @@
-"""Alerting API — Flask blueprint for embedded condition state transitions."""
+"""Alerting API — Flask blueprint for embedded alert incident delivery."""
 
 from flask import Blueprint, jsonify, request
 
@@ -11,7 +11,7 @@ alerting_api = Blueprint("alerting_api", __name__)
 alert_incident_event_service = AlertIncidentEventApplicationService()
 
 
-@alerting_api.route("/api/v1/device/alerts/pending", methods=["GET"])
+@alerting_api.route("/api/v1/alerting/incidents/pending", methods=["GET"])
 def get_pending_alert_incidents_for_embedded():
     """Return alert incident events pending for the authenticated embedded device.
 
@@ -38,7 +38,7 @@ def get_pending_alert_incidents_for_embedded():
         return jsonify({"error": str(exc)}), 400
 
 
-@alerting_api.route("/api/v1/device/alerts/<int:event_id>/ack", methods=["POST"])
+@alerting_api.route("/api/v1/alerting/incidents/<int:event_id>/ack", methods=["POST"])
 def acknowledge_alert_incident_event(event_id: int):
     """Acknowledge that the embedded processed an alert incident event.
 

@@ -245,7 +245,7 @@ OPENAPI_SPEC = {
         },
 
 
-        "/api/v1/device/alerts/pending": {
+        "/api/v1/alerting/incidents/pending": {
             "get": {
                 "tags": ["Alerting"],
                 "summary": "Get pending alert incident events",
@@ -258,7 +258,7 @@ OPENAPI_SPEC = {
             }
         },
 
-        "/api/v1/device/alerts/{eventId}/ack": {
+        "/api/v1/alerting/incidents/{eventId}/ack": {
             "post": {
                 "tags": ["Alerting"],
                 "summary": "Acknowledge alert incident event",
