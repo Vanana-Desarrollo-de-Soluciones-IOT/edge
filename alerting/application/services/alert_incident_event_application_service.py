@@ -92,18 +92,8 @@ class AlertIncidentEventApplicationService:
     def _to_dict(model) -> dict:
         return {
             "id": model.id,
-            "alert_id": model.alert_id,
-            "device_id": model.device_id,
-            "hardware_id": model.hardware_id,
-            "space_id": model.space_id,
             "metric": model.metric,
             "status": model.status,
-            "message": model.message,
-            "threshold_value": model.threshold_value,
-            "actual_value": model.actual_value,
             "occurred_at": model.occurred_at.isoformat(),
             "resolved_at": model.resolved_at.isoformat() if model.resolved_at else None,
-            "received_at": model.received_at.isoformat(),
-            "delivered_at": model.delivered_at.isoformat() if model.delivered_at else None,
-            "acknowledged_at": model.acknowledged_at.isoformat() if model.acknowledged_at else None,
         }

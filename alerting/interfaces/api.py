@@ -24,6 +24,7 @@ def get_pending_alert_incidents_for_embedded():
 
     Returns:
         200: Pending alert incident events, marked as delivered.
+             Payload is intentionally minimal for embedded consumption.
         401: Missing or invalid device credentials.
     """
     auth_error = authenticate_request(update_last_seen=False)
@@ -47,7 +48,7 @@ def acknowledge_alert_incident_event(event_id: int):
         X-API-Key: embedded device secret.
 
     Returns:
-        200: ACK stored.
+        200: ACK stored. Payload is minimal and echoes the event.
         400: Unknown event.
         401: Missing or invalid device credentials.
     """
