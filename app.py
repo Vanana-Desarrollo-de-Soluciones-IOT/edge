@@ -15,6 +15,8 @@ from device.application.kafka_command_consumer import KafkaCommandConsumer
 from device.application.outbox_processor import TelemetryOutboxProcessor
 from device.infrastructure.kafka.device_kafka_topics import DeviceKafkaTopics
 from device.interfaces.api import device_api
+from alerting.infrastructure.kafka.alerting_kafka_topics import AlertingKafkaTopics
+from alerting.interfaces.api import alerting_api
 from iam.application.device_presence_monitor import DevicePresenceMonitor
 from iam.infrastructure.kafka.iam_kafka_topics import IamKafkaTopics
 from iam.interfaces.services import iam_api
@@ -31,6 +33,7 @@ from shared.interfaces.docs_api import docs_api
 app = Flask(__name__)
 app.register_blueprint(iam_api)
 app.register_blueprint(device_api)
+app.register_blueprint(alerting_api)
 app.register_blueprint(docs_api)
 
 logger = logging.getLogger(__name__)
@@ -46,6 +49,7 @@ def _collect_all_topics() -> list:
     """Gather topic definitions from every bounded context."""
     return (
         DeviceKafkaTopics.all()
+        + AlertingKafkaTopics.all()
         + IamKafkaTopics.all()
         + ProvisioningKafkaTopics.all()
     )

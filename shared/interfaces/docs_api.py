@@ -18,6 +18,7 @@ OPENAPI_SPEC = {
     "tags": [
         {"name": "Telemetry", "description": "Environmental telemetry ingestion from IoT sensors."},
         {"name": "Commands", "description": "Embedded device command delivery. Commands arrive via Kafka from clair-core."},
+        {"name": "Alerting", "description": "Embedded-to-core alert condition state transitions (NORMAL/CRITICAL)."},
     ],
     "components": {
         "securitySchemes": {
@@ -172,6 +173,15 @@ OPENAPI_SPEC = {
                     "seconds_since_last_seen": {"type": "integer", "description": "Seconds elapsed since last telemetry (-1 if never seen)."},
                 },
             },
+            "AlertConditionStateChangedRequest": {
+                "type": "object",
+                "required": ["metric", "conditionState"],
+                "properties": {
+                    "metric": {"type": "string", "description": "Metric identifier (e.g., CO2, PM25, TEMPERATURE, HUMIDITY)."},
+                    "conditionState": {"type": "string", "enum": ["NORMAL", "CRITICAL"], "description": "Condition state computed by embedded."},
+                    "occurredAt": {"type": "string", "format": "date-time", "nullable": True, "description": "Optional timestamp when the transition occurred."},
+                },
+            },
             "ErrorResponse": {
                 "type": "object",
                 "properties": {"error": {"type": "string"}},
@@ -239,6 +249,25 @@ OPENAPI_SPEC = {
                     "200": {"description": "Command acknowledged.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceCommand"}}}},
                     "400": {"description": "Invalid ACK or unknown command.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                     "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+
+        "/api/v1/device/alert-condition": {
+            "post": {
+                "tags": ["Alerting"],
+                "summary": "Publish alert condition state change",
+                "description": "Authenticates the device locally and publishes a metric condition transition (NORMAL/CRITICAL) to Kafka for clair-core.",
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
+                "requestBody": {
+                    "required": True,
+                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AlertConditionStateChangedRequest"}}},
+                },
+                "responses": {
+                    "202": {"description": "Event accepted."},
+                    "400": {"description": "Missing fields or invalid values.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "503": {"description": "Kafka unavailable/publish failed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                 },
             }
         },
