@@ -18,6 +18,7 @@ OPENAPI_SPEC = {
     "tags": [
         {"name": "Telemetry", "description": "Environmental telemetry ingestion from IoT sensors."},
         {"name": "Commands", "description": "Embedded device command delivery. Commands arrive via Kafka from clair-core."},
+        {"name": "Alerting", "description": "Embedded-to-core alert condition state transitions (NORMAL/CRITICAL)."},
     ],
     "components": {
         "securitySchemes": {
@@ -172,6 +173,25 @@ OPENAPI_SPEC = {
                     "seconds_since_last_seen": {"type": "integer", "description": "Seconds elapsed since last telemetry (-1 if never seen)."},
                 },
             },
+            "AlertIncidentEvent": {
+                "type": "object",
+                "required": ["id", "metric", "status", "occurred_at", "resolved_at"],
+                "properties": {
+                    "id": {"type": "integer", "description": "Edge-local event ID used for ACK."},
+                    "metric": {"type": "string", "description": "Metric identifier (e.g., CO2, PM25, TEMPERATURE, HUMIDITY)."},
+                    "status": {"type": "string", "description": "Incident status (ACTIVE to start UX, RESOLVED to stop UX)."},
+                    "occurred_at": {"type": "string", "format": "date-time", "description": "When the incident opened."},
+                    "resolved_at": {"type": "string", "format": "date-time", "nullable": True, "description": "When the incident closed (nullable)."},
+                },
+            },
+            "PendingAlertIncidentEventsResponse": {
+                "type": "object",
+                "required": ["count", "events"],
+                "properties": {
+                    "count": {"type": "integer"},
+                    "events": {"type": "array", "items": {"$ref": "#/components/schemas/AlertIncidentEvent"}},
+                },
+            },
             "ErrorResponse": {
                 "type": "object",
                 "properties": {"error": {"type": "string"}},
@@ -238,6 +258,41 @@ OPENAPI_SPEC = {
                 "responses": {
                     "200": {"description": "Command acknowledged.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceCommand"}}}},
                     "400": {"description": "Invalid ACK or unknown command.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                    "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+
+
+        "/api/v1/alerting/incidents/pending": {
+            "get": {
+                "tags": ["Alerting"],
+                "summary": "Get pending alert incident events",
+                "description": "Authenticates the embedded device and returns locally cached alert incident events received from clair-core, marking them as delivered.",
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
+                "responses": {
+                    "200": {
+                        "description": "Pending events returned.",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PendingAlertIncidentEventsResponse"}}},
+                    },
+                    "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+                },
+            }
+        },
+
+        "/api/v1/alerting/incidents/{eventId}/ack": {
+            "post": {
+                "tags": ["Alerting"],
+                "summary": "Acknowledge alert incident event",
+                "description": "Marks an alert incident event as acknowledged by embedded.",
+                "security": [{"DeviceCredentials": [], "DeviceApiKey": []}],
+                "parameters": [{"name": "eventId", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                "responses": {
+                    "200": {
+                        "description": "Event acknowledged.",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AlertIncidentEvent"}}},
+                    },
+                    "400": {"description": "Unknown event.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                     "401": {"description": "Missing or invalid device credentials.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
                 },
             }

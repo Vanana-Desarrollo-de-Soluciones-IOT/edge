@@ -34,3 +34,4 @@ class KafkaConsumerGroups:
 
     EDGE_COMMAND_CONSUMER = "edge-device-commands-consumer"
     EDGE_PROVISIONING_CONSUMER = "edge-provisioning-consumer"
+    EDGE_ALERTING_CONSUMER = "edge-alerting-consumer"

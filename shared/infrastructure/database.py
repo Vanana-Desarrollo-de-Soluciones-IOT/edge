@@ -99,10 +99,20 @@ def init_db():
         from iam.infrastructure.models import DeviceModel
         from device.infrastructure.models import DeviceCommandModel, DeviceTelemetryModel
         from device.infrastructure.outbox.outbox_record_model import OutboxRecordModel
+        from alerting.infrastructure.models import AlertIncidentEventModel
 
         _migrate_remove_device_secret()
         _migrate_telemetry_schema()
         _migrate_outbox_schema()
-        db.create_tables([DeviceModel, DeviceTelemetryModel, DeviceCommandModel, OutboxRecordModel], safe=True)
+        db.create_tables(
+            [
+                DeviceModel,
+                DeviceTelemetryModel,
+                DeviceCommandModel,
+                OutboxRecordModel,
+                AlertIncidentEventModel,
+            ],
+            safe=True,
+        )
     finally:
         db.close()
