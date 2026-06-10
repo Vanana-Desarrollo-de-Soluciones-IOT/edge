@@ -1,6 +1,6 @@
 # Edge Service — IoT Telemetry Ingestion
 
-Servicio edge para la ingesta de telemetría ambiental (CO2 y PM2.5) desde dispositivos IoT. Autentica dispositivos, valida los datos y los persiste localmente en SQLite.
+Servicio edge para la ingesta de telemetría ambiental (CO2 y PM2.5) desde dispositivos IoT. Valida el estado del dispositivo localmente (cache) y sincroniza telemetría, comandos y presencia con clair-core via Kafka.
 
 ## Stack Tecnológico
 
@@ -22,12 +22,12 @@ edge-service/
 ├── iam/                           # Bounded Context: Identity & Access Management
 │   ├── domain/
 │   │   ├── entities.py            # Entidad Device (aggregate root, 7 atributos)
-│   │   └── services.py            # AuthService: valida credenciales + status ACTIVE
+│   │   └── services.py            # AuthService: valida credenciales + status sincronizado
 │   ├── application/
-│   │   └── services.py            # AuthApplicationService: orquesta autenticación
+│   │   └── services.py            # AuthApplicationService: orquesta autenticación local
 │   ├── infrastructure/
 │   │   ├── models.py              # DeviceModel (Peewee) → tabla 'devices'
-│   │   └── repositories.py        # DeviceRepository: find, get_or_create, update_last_seen
+│   │   └── repositories.py        # DeviceRepository: find/update_last_seen
 │   └── interfaces/
 │       └── services.py            # Blueprint iam_api + authenticate_request()
 ├── device/                        # Bounded Context: Device Telemetry
@@ -41,9 +41,14 @@ edge-service/
 │   │   └── repositories.py        # DeviceTelemetryRepository: persistencia
 │   └── interfaces/
 │       └── api.py                 # Blueprint device_api + POST /api/v1/device/telemetry
+├── provisioning/                  # Bounded Context: Device Provisioning
+│   ├── application/               # Kafka consumer + ACL contra clair-core
+│   ├── domain/                    # Commands, queries y validación de cache
+│   ├── infrastructure/            # Upsert del cache local de devices
+│   └── interfaces/                # Recursos para consumo Kafka
 └── shared/                        # Infraestructura compartida
     └── infrastructure/
-        └── database.py            # SqliteDatabase('smart_band.db') + init_db()
+        └── database.py            # SqliteDatabase(EDGE_DATABASE_PATH || 'clair_edge.db') + init_db()
 ```
 
 ## Requisitos Previos
@@ -82,14 +87,14 @@ Crea un nuevo registro de telemetría ambiental para un dispositivo autenticado.
 
 ```
 Content-Type: application/json
-X-API-Key: <api_key del dispositivo>
+X-Hardware-Id: <hardware-id-del-dispositivo>
+X-API-Key: <api-key-del-dispositivo>
 ```
 
 **Body (JSON):**
 
 ```json
 {
-  "device_id": "smart-band-001",
   "co2": 420.5,
   "pm25": 35.2,
   "created_at": "2026-05-16T22:30:00-05:00"
@@ -98,7 +103,6 @@ X-API-Key: <api_key del dispositivo>
 
 | Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `device_id` | string | Sí | Identificador del dispositivo |
 | `co2` | number | Sí | Concentración de CO2 en ppm (rango: 0–5000) |
 | `pm25` | number | Sí | Material particulado PM2.5 en µg/m³ (rango: 0–500) |
 | `created_at` | string | No | Timestamp ISO 8601; si se omite usa UTC actual |
@@ -107,41 +111,44 @@ X-API-Key: <api_key del dispositivo>
 
 | Código | Condición | Body |
 |---|---|---|
-| `201` | Registro creado | `{"id": 1, "device_id": "...", "co2": 420.5, "pm25": 35.2, "created_at": "..."}` |
+| `201` | Registro creado | `{"id": 1, "hardware_id": "...", "co2": 420.5, "pm25": 35.2, "created_at": "..."}` |
 | `400` | Campos faltantes o valores inválidos | `{"error": "..."}` |
-| `401` | Credenciales inválidas o dispositivo no ACTIVE | `{"error": "..."}` |
+| `401` | Credenciales inválidas o dispositivo no autorizado | `{"error": "..."}` |
 
 ### Probar con curl
 
 ```bash
 curl -X POST http://127.0.0.1:5000/api/v1/device/telemetry \
   -H 'Content-Type: application/json' \
-  -H 'X-API-Key: test-api-key-123' \
+  -H 'X-Hardware-Id: CLAIR-0001' \
+  -H 'X-API-Key: <api-key>' \
   -d '{
-    "device_id": "smart-band-001",
     "co2": 420.5,
     "pm25": 35.2,
     "created_at": "2026-05-16T22:30:00-05:00"
   }'
 ```
 
-## Dispositivo de Prueba (Seed)
+## Sincronizacion de Devices
 
-Al iniciar, se crea automáticamente un dispositivo de desarrollo:
+El edge no crea devices de prueba. Recibe los devices maestros desde `clair-core` via Kafka (`clair.provisioning.devices.changed`) y los cachea en SQLite para validar telemetria localmente.
 
-| Campo | Valor |
-|---|---|
-| `device_id` | `smart-band-001` |
-| `hardware_id` | `HW-SB-001-ABC123` |
-| `api_key` | `test-api-key-123` |
-| `status` | `ACTIVE` |
+La sincronizacion es reactiva via Kafka: el core publica cambios y el edge los consume en tiempo real.
 
-> ⚠️ Credenciales solo para desarrollo local. No usar en producción.
+Variables relevantes:
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `EDGE_DATABASE_PATH` | `clair_edge.db` | Ruta del SQLite local del edge |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Broker Kafka para comunicacion edge <-> core |
+| `EDGE_PUBLIC_BASE_URL` | `http://127.0.0.1:5000` | Base URL para el OpenAPI `servers` (docs) |
+
+Este proyecto soporta archivo `.env` (cargado al iniciar via `python-dotenv`). Usa `.env.example` como base.
 
 ## Inspeccionar la Base de Datos
 
 ```bash
-sqlite3 smart_band.db ".tables"
-sqlite3 smart_band.db "SELECT * FROM devices;"
-sqlite3 smart_band.db "SELECT * FROM device_telemetry;"
+sqlite3 clair_edge.db ".tables"
+sqlite3 clair_edge.db "SELECT * FROM devices;"
+sqlite3 clair_edge.db "SELECT * FROM device_telemetry;"
 ```

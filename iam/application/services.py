@@ -1,42 +1,84 @@
 """IAM application services.
 
-Orchestrates device authentication and test device provisioning
-by coordinating domain services with infrastructure repositories.
+Orchestrates device authentication by coordinating domain services
+with infrastructure repositories.
 """
 
+import logging
+from datetime import datetime, timezone
+
+from iam.application.outboundservices.acl.kafka_presence_publisher import KafkaPresencePublisher
+from iam.domain.events import DevicePresenceChangedEvent
 from iam.domain.services import AuthService
 from iam.infrastructure.repositories import DeviceRepository
+
+logger = logging.getLogger(__name__)
 
 
 class AuthApplicationService:
     """Application service that orchestrates IAM authentication workflows.
 
     Coordinates between the AuthService (domain logic) and
-    DeviceRepository (infrastructure) to authenticate devices
-    and manage test device provisioning.
+    DeviceRepository (infrastructure) to authenticate devices.
     """
 
     def __init__(self):
         self.device_repository = DeviceRepository()
         self.auth_service = AuthService()
 
-    def authenticate(self, device_id, api_key):
-        """Authenticate a device by its ID and API key.
+    def authenticate(self, hardware_id, api_key):
+        """Authenticate a physical device by its hardware ID and api key.
 
         Args:
-            device_id: The logical device identifier.
-            api_key: The secret API key provided via X-API-Key header.
+            hardware_id: The physical hardware identifier.
+            api_key: The secret key provided by the physical embedded device.
 
         Returns:
-            True if the device exists and is ACTIVE, False otherwise.
+            True if the device exists and is allowed by its synchronized status.
         """
-        device = self.device_repository.find_by_id_and_api_key(device_id, api_key)
+        device = self.device_repository.find_by_hardware_id_and_api_key(hardware_id, api_key)
         return self.auth_service.authenticate(device)
 
-    def get_or_create_test_device(self):
-        """Provision the default test device for development.
 
-        Returns:
-            The test Device domain entity (created or existing).
-        """
-        return self.device_repository.get_or_create_test_device()
+class DevicePresenceApplicationService:
+    """Application service for publishing edge-detected presence transitions via Kafka."""
+
+    def __init__(self):
+        self.device_repository = DeviceRepository()
+        self.kafka_presence_publisher = KafkaPresencePublisher()
+
+    def mark_seen(self, hardware_id: str) -> None:
+        """Mark a device ONLINE from telemetry and publish the transition if needed."""
+        device = self.device_repository.update_last_seen(hardware_id)
+        if device is not None:
+            self._publish_presence(device)
+
+    def mark_stale_devices_offline(self, offline_before) -> int:
+        """Mark stale devices OFFLINE and publish one event per transition."""
+        devices = self.device_repository.mark_offline_stale_devices(offline_before)
+        occurred_at = datetime.now(timezone.utc)
+        for device in devices:
+            if device is not None:
+                self._publish_presence(device, occurred_at=occurred_at)
+        return len(devices)
+
+    def _publish_presence(self, device, occurred_at=None) -> None:
+        occurred_at = occurred_at or device.last_seen_at or datetime.now(timezone.utc)
+        event = DevicePresenceChangedEvent(
+            device_id=device.device_id,
+            hardware_id=device.hardware_id,
+            status=device.status,
+            occurred_at=occurred_at,
+        )
+        payload = {
+            "device_id": event.device_id,
+            "hardware_id": event.hardware_id,
+            "status": event.status,
+            "occurred_at": event.occurred_at.isoformat(),
+        }
+        if not self.kafka_presence_publisher.publish_device_presence_changed(payload):
+            logger.warning(
+                "Failed to publish %s presence event for hardware_id=%s",
+                event.status,
+                event.hardware_id,
+            )

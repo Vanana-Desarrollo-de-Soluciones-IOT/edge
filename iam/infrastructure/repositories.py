@@ -5,6 +5,7 @@ mapping between Peewee models and domain entities.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from iam.domain.entities import Device
 from iam.infrastructure.models import DeviceModel
@@ -17,19 +18,19 @@ class DeviceRepository:
     Peewee ORM models (infrastructure) and Device domain entities.
     """
 
-    def find_by_id_and_api_key(self, device_id, api_key):
-        """Find a device by its ID and API key combination.
+    def find_by_hardware_id_and_api_key(self, hardware_id, api_key):
+        """Find a device by its hardware ID and api key combination.
 
         Args:
-            device_id: The logical device identifier.
-            api_key: The secret API key to validate.
+            hardware_id: The physical hardware identifier.
+            api_key: The secret key provided by the physical embedded device.
 
         Returns:
             A Device domain entity if found, None otherwise.
         """
         try:
             model = DeviceModel.get(
-                (DeviceModel.device_id == device_id) &
+                (DeviceModel.hardware_id == hardware_id) &
                 (DeviceModel.api_key == api_key)
             )
             return Device(
@@ -39,52 +40,83 @@ class DeviceRepository:
                 status=model.status,
                 created_at=model.created_at,
                 last_seen_at=model.last_seen_at,
-                owner_user_id=model.owner_user_id,
             )
         except DeviceModel.DoesNotExist:
             return None
 
-    def get_or_create_test_device(self):
-        """Provision the default test device for development.
+    def update_last_seen(self, hardware_id):
+        """Update last_seen_at and mark the device ONLINE.
 
-        Creates the test device if it doesn't exist yet. Uses hardcoded
-        development credentials — never use in production.
-
-        Returns:
-            The test Device domain entity.
-        """
-        model, created = DeviceModel.get_or_create(
-            device_id="smart-band-001",
-            defaults={
-                "hardware_id": "HW-SB-001-ABC123",
-                "api_key": "test-api-key-123",
-                "status": "ACTIVE",
-                "created_at": datetime(2025, 6, 4, 23, 23, 0, tzinfo=timezone.utc),
-                "last_seen_at": None,
-                "owner_user_id": None,
-            },
-        )
-        return Device(
-            device_id=model.device_id,
-            hardware_id=model.hardware_id,
-            api_key=model.api_key,
-            status=model.status,
-            created_at=model.created_at,
-            last_seen_at=model.last_seen_at,
-            owner_user_id=model.owner_user_id,
-        )
-
-    def update_last_seen(self, device_id):
-        """Update the last_seen_at timestamp for a device.
-
-        Called after every successful authentication to track
-        device activity and detect offline sensors.
+        Returns the updated device only when the status changed to ONLINE.
 
         Args:
-            device_id: The logical device identifier to update.
+            hardware_id: The physical hardware identifier to update.
         """
-        DeviceModel.update(
-            last_seen_at=datetime.now(timezone.utc)
-        ).where(
-            DeviceModel.device_id == device_id
+        device = self.find_by_hardware_id(hardware_id)
+        if device is None:
+            return None
+
+        now = datetime.now(timezone.utc)
+        DeviceModel.update(last_seen_at=now, status="ONLINE").where(
+            DeviceModel.hardware_id == hardware_id
         ).execute()
+
+        if device.status == "ONLINE":
+            return None
+        return self.find_by_hardware_id(hardware_id)
+
+    def mark_offline_stale_devices(self, offline_before: datetime) -> list[Device]:
+        """Mark devices as OFFLINE when their last_seen_at is stale.
+
+        Args:
+            offline_before: Devices seen before this UTC timestamp become OFFLINE.
+
+        Returns:
+            Devices whose status changed to OFFLINE.
+        """
+        stale_models = list(
+            DeviceModel.select().where(
+                (DeviceModel.last_seen_at.is_null(False))
+                & (DeviceModel.last_seen_at < offline_before)
+                & (DeviceModel.status != "OFFLINE")
+            )
+        )
+        if not stale_models:
+            return []
+
+        hardware_ids = [model.hardware_id for model in stale_models]
+        DeviceModel.update(status="OFFLINE").where(
+            DeviceModel.hardware_id.in_(hardware_ids)
+        ).execute()
+
+        return [self.find_by_hardware_id(hardware_id) for hardware_id in hardware_ids]
+
+    def find_by_hardware_id(self, hardware_id):
+        """Find a device by its hardware ID (without validating credentials)."""
+        try:
+            model = DeviceModel.get(DeviceModel.hardware_id == hardware_id)
+            return Device(
+                device_id=model.device_id,
+                hardware_id=model.hardware_id,
+                api_key=model.api_key,
+                status=model.status,
+                created_at=model.created_at,
+                last_seen_at=model.last_seen_at,
+            )
+        except DeviceModel.DoesNotExist:
+            return None
+
+    def find_by_device_id(self, device_id):
+        """Find a device by its clair-core device ID."""
+        try:
+            model = DeviceModel.get(DeviceModel.device_id == device_id)
+            return Device(
+                device_id=model.device_id,
+                hardware_id=model.hardware_id,
+                api_key=model.api_key,
+                status=model.status,
+                created_at=model.created_at,
+                last_seen_at=model.last_seen_at,
+            )
+        except DeviceModel.DoesNotExist:
+            return None

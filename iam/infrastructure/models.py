@@ -1,7 +1,6 @@
 """Peewee ORM model for the devices table.
 
-Maps the Device aggregate root to the SQLite 'devices' table
-with 7 columns matching the domain entity attributes.
+Maps the local clair-core device cache to the SQLite 'devices' table.
 """
 
 from peewee import CharField, DateTimeField, Model
@@ -15,20 +14,18 @@ class DeviceModel(Model):
     Columns:
         device_id: Primary key — logical device identifier.
         hardware_id: Unique physical hardware ID.
-        api_key: Secret authentication key.
-        status: Lifecycle state (ACTIVE, INACTIVE, BLOCKED).
+        api_key: Secret authentication key for physical device -> edge communication.
+        status: Lifecycle state synchronized from clair-core.
         created_at: Registration timestamp.
         last_seen_at: Last telemetry timestamp (nullable).
-        owner_user_id: Owning user ID (nullable).
     """
 
     device_id = CharField(primary_key=True)
     hardware_id = CharField(unique=True)
     api_key = CharField()
-    status = CharField(default="ACTIVE")
+    status = CharField()
     created_at = DateTimeField()
     last_seen_at = DateTimeField(null=True)
-    owner_user_id = CharField(null=True)
 
     class Meta:
         database = db

@@ -1,71 +1,103 @@
 """Device domain services.
 
-Contains business rules for CO2/PM2.5 data validation
-and timestamp normalization.
+Contains business rules for telemetry validation, uptime parsing,
+and creation of DeviceTelemetry aggregate roots.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from dateutil import parser as dateutil_parser
 
+from device.domain.commands import CreateFullTelemetryRecordCommand
 from device.domain.entities import DeviceTelemetry
+from device.domain.valueobjects import AirQuality, Connectivity, Location, ParticulateMatter
 
 
 class DeviceTelemetryService:
-    """Domain service for telemetry data validation and creation.
-
-    Enforces business rules:
-    - CO2 must be a valid float in range [0, 5000] ppm
-    - PM2.5 must be a valid float in range [0, 500] µg/m³
-    - Timestamps are normalized to UTC
-    """
+    """Domain service for optimized telemetry validation and creation."""
 
     @staticmethod
-    def create_record(device_id, co2, pm25, created_at=None):
-        """Validate inputs and create a DeviceTelemetry domain entity.
+    def create_record_from_command(command: CreateFullTelemetryRecordCommand) -> DeviceTelemetry:
+        """Validate command data and create a DeviceTelemetry entity.
 
         Args:
-            device_id: Logical identifier of the source device.
-            co2: CO2 concentration in ppm (will be cast to float).
-            pm25: PM2.5 concentration in µg/m³ (will be cast to float).
-            created_at: ISO 8601 string, datetime, or None (defaults to UTC now).
+            command: CreateFullTelemetryRecordCommand with device data.
 
         Returns:
-            A validated DeviceTelemetry domain entity.
+            A validated DeviceTelemetry aggregate root entity.
 
         Raises:
-            ValueError: If co2 or pm25 are not valid numbers or out of range,
-                        or if created_at cannot be parsed.
+            ValueError: If any validation fails.
         """
-        # Validate CO2
-        try:
-            co2 = float(co2)
-        except (TypeError, ValueError):
-            raise ValueError(f"Invalid CO2 value: {co2}")
-
-        if co2 < 0 or co2 > 5000:
-            raise ValueError(f"CO2 must be between 0 and 5000 ppm, got {co2}")
-
-        # Validate PM2.5
-        try:
-            pm25 = float(pm25)
-        except (TypeError, ValueError):
-            raise ValueError(f"Invalid PM2.5 value: {pm25}")
-
-        if pm25 < 0 or pm25 > 500:
-            raise ValueError(f"PM2.5 must be between 0 and 500 µg/m³, got {pm25}")
-
-        # Parse timestamp
-        if created_at is None:
-            parsed_created_at = datetime.now(timezone.utc)
-        elif isinstance(created_at, str):
-            parsed_created_at = dateutil_parser.parse(created_at).astimezone(timezone.utc)
-        else:
-            parsed_created_at = created_at.astimezone(timezone.utc)
+        air_quality = AirQuality.from_dict(command.air_quality)
+        particulate_matter = ParticulateMatter.from_dict(command.particulate_matter)
+        connectivity = Connectivity.from_dict(command.connectivity)
+        location = Location.from_dict(command.location)
+        uptime_seconds = DeviceTelemetryService._parse_uptime(command.uptime)
+        recorded_at = DeviceTelemetryService._parse_timestamp(command.created_at)
 
         return DeviceTelemetry(
-            device_id=device_id,
-            co2=co2,
-            pm25=pm25,
-            created_at=parsed_created_at,
+            device_id=command.hardware_id,
+            device_time=command.device_time,
+            uptime_seconds=uptime_seconds,
+            air_quality=air_quality,
+            particulate_matter=particulate_matter,
+            connectivity=connectivity,
+            location=location,
+            health_status=command.health_status,
+            status=command.status,
+            recorded_at=recorded_at,
         )
+
+    @staticmethod
+    def _parse_uptime(uptime: str) -> int:
+        """Parse uptime string to total seconds.
+
+        Supports HH:MM:SS format (e.g., "00:00:20") or plain integer strings.
+
+        Args:
+            uptime: Uptime string from the device.
+
+        Returns:
+            Total uptime in seconds.
+
+        Raises:
+            ValueError: If uptime format is invalid.
+        """
+        if uptime.isdigit():
+            return int(uptime)
+
+        parts = uptime.split(":")
+        if len(parts) == 3:
+            try:
+                hours = int(parts[0])
+                minutes = int(parts[1])
+                seconds = int(parts[2])
+                return hours * 3600 + minutes * 60 + seconds
+            except ValueError as exc:
+                raise ValueError(f"Invalid uptime format: {uptime}") from exc
+
+        raise ValueError(f"Invalid uptime format: {uptime}. Expected HH:MM:SS or integer seconds.")
+
+    @staticmethod
+    def _parse_timestamp(created_at: Optional[str]) -> datetime:
+        """Parse timestamp string to UTC datetime.
+
+        Args:
+            created_at: ISO 8601 timestamp string or None.
+
+        Returns:
+            UTC datetime.
+
+        Raises:
+            ValueError: If timestamp cannot be parsed.
+        """
+        if created_at is None:
+            return datetime.now(timezone.utc)
+
+        try:
+            parsed = dateutil_parser.parse(created_at)
+            return parsed.astimezone(timezone.utc)
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid timestamp format: {created_at}") from e
